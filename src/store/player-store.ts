@@ -22,29 +22,35 @@ let player: AudioPlayer | null = null;
 let metadataTimer: ReturnType<typeof setInterval> | null = null;
 
 /**
- * Normalizes and secures radio stream URLs:
- * - Fixes insecure http -> https when supported or needed.
- * - Resolves Shoutcast port streams with proper streaming paths (/; or ;).
- * - Falls back to HLS .m3u8 if known for Turkish stations like Alem FM.
+ * Normalizes and resolves robust streaming URLs.
+ * Catches known redirect-heavy or HTML landing streams.
  */
 function normalizeStreamUrl(station: Station): string[] {
+  const name = station.name.toLowerCase();
   const url = station.url_resolved || '';
   const candidates: string[] = [];
 
-  // Special known station stream fixes (like Alem FM)
-  if (station.name.toLowerCase().includes('alem fm')) {
-    candidates.push('http://turkmedya.radyotvonline.com/turkmedya/alemfm.stream/playlist.m3u8');
+  // Special known station stream direct URLs
+  if (name.includes('alem fm') || name.includes('alemfm')) {
     candidates.push('https://turkmedya.radyotvonline.net/alemfmaac');
+    candidates.push('http://turkmedya.radyotvonline.com/turkmedya/alemfm.stream/playlist.m3u8');
+    candidates.push('https://edge1.radyotvonline.net/shoutcast/play/alemfm');
+  } else if (name.includes('virgin radio') && (station.countrycode === 'GB' || name.includes('uk'))) {
+    candidates.push('https://virgin.live.stream.broadcasting.news/stream');
+  }
+
+  // Follow redirect or use given URL
+  if (url.includes('radio.virginradio.co.uk/stream')) {
+    candidates.push('https://virgin.live.stream.broadcasting.news/stream');
   }
 
   candidates.push(url);
 
-  // In Shoutcast v1 servers, appending /; or /stream prevents HTML landing pages
+  // In Shoutcast servers without file extensions, appending /; ensures stream mode
   if (!url.includes('.m3u8') && !url.endsWith('/') && !url.includes('/;')) {
     candidates.push(`${url}/;`);
   }
 
-  // http to https fallback candidate
   if (url.startsWith('http://')) {
     candidates.push(url.replace('http://', 'https://'));
   }
@@ -62,7 +68,7 @@ async function getPlayer(): Promise<AudioPlayer> {
     });
     logger.info('AUDIO', 'Audio mode configured successfully');
   } catch (err) {
-    logger.warn('AUDIO', 'Failed to configure audio mode (may require dev build)', err);
+    logger.warn('AUDIO', 'Failed to configure audio mode', err);
   }
 
   try {
@@ -86,7 +92,6 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
       return;
     }
 
-    // Clear previous song poller
     if (metadataTimer) {
       clearInterval(metadataTimer);
       metadataTimer = null;
@@ -113,7 +118,6 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
         success = true;
         logger.info('PLAYER', `Playback started successfully with: ${streamUrl}`);
 
-        // Initial track title fetch & periodic poller
         fetchCurrentTrack(streamUrl).then((track) => {
           if (track) set({ currentTrack: track });
         });
@@ -123,7 +127,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
             const track = await fetchCurrentTrack(streamUrl);
             if (track) set({ currentTrack: track });
           }
-        }, 15000);
+        }, 12000);
 
         break;
       } catch (err) {

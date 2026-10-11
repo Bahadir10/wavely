@@ -8,6 +8,7 @@ import { StateView } from '@/components/state-view';
 import { StationRow } from '@/components/station-row';
 import { COUNTRIES, GENRES, capitalize } from '@/constants/catalog';
 import { useStations } from '@/hooks/use-stations';
+import { useI18n } from '@/store/settings-store';
 import { useTheme } from '@/theme/theme-provider';
 import { radius, spacing } from '@/theme/tokens';
 
@@ -22,6 +23,7 @@ function useDebounced<T>(value: T, delay = 400) {
 
 export default function SearchScreen() {
   const { colors } = useTheme();
+  const t = useI18n();
   const [text, setText] = useState('');
   const [genre, setGenre] = useState<string | undefined>();
   const [country, setCountry] = useState<string | undefined>();
@@ -34,13 +36,13 @@ export default function SearchScreen() {
   );
 
   return (
-    <Screen title="Search" scroll={false}>
+    <Screen title={t.search} scroll={false}>
       <View style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Ionicons name="search" size={20} color={colors.textMuted} />
         <TextInput
           value={text}
           onChangeText={setText}
-          placeholder="Stations, e.g. Jazz FM"
+          placeholder={t.searchPlaceholder}
           placeholderTextColor={colors.textMuted}
           style={[styles.textInput, { color: colors.text }]}
           autoCorrect={false}
@@ -75,20 +77,20 @@ export default function SearchScreen() {
       {!hasFilter ? (
         <StateView
           icon="search-outline"
-          title="Find your station"
-          message="Search by name or pick a genre or country."
+          title={t.findStation}
+          message={t.searchHint}
         />
       ) : isFetching && !data ? (
         <StateView loading />
       ) : isError ? (
-        <StateView icon="cloud-offline-outline" title="Search failed" onRetry={refetch} />
+        <StateView icon="cloud-offline-outline" title={t.couldNotLoad} onRetry={refetch} />
       ) : (
         <FlatList
           data={data}
           keyExtractor={(s) => s.stationuuid}
           renderItem={({ item }) => <StationRow station={item} />}
           ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
-          ListEmptyComponent={<StateView title="No results" message="Try a different keyword." />}
+          ListEmptyComponent={<StateView title={t.noResults} message={t.tryDifferent} />}
           contentContainerStyle={styles.list}
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}

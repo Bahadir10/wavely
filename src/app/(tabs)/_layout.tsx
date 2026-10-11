@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MiniPlayer } from '@/components/mini-player';
+import { useI18n } from '@/store/settings-store';
 import { useTheme } from '@/theme/theme-provider';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -18,10 +19,18 @@ const TAB_ICONS: Record<string, [IconName, IconName]> = {
   settings: ['settings-outline', 'settings'],
 };
 
-/** Custom tab bar so the mini player can sit directly on top of it on every tab. */
+/** Custom tab bar with localized labels and persistent mini player. */
 function TabBar({ state, descriptors, navigation }: TabBarProps) {
   const { colors } = useTheme();
+  const t = useI18n();
   const insets = useSafeAreaInsets();
+
+  const tabLabels: Record<string, string> = {
+    index: t.home,
+    search: t.search,
+    favorites: t.favorites,
+    settings: t.settings,
+  };
 
   return (
     <View>
@@ -40,7 +49,7 @@ function TabBar({ state, descriptors, navigation }: TabBarProps) {
           const focused = state.index === index;
           const color = focused ? colors.primary : colors.textMuted;
           const [icon, activeIcon] = TAB_ICONS[route.name] ?? ['ellipse-outline', 'ellipse'];
-          const label = descriptors[route.key].options.title ?? route.name;
+          const label = tabLabels[route.name] ?? descriptors[route.key].options.title ?? route.name;
 
           const onPress = () => {
             const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });

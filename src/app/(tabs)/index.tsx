@@ -8,12 +8,13 @@ import { StateView } from '@/components/state-view';
 import { StationRow } from '@/components/station-row';
 import { GENRES, capitalize } from '@/constants/catalog';
 import { useStations } from '@/hooks/use-stations';
-import { useSettingsStore } from '@/store/settings-store';
+import { useSettingsStore, useI18n } from '@/store/settings-store';
 import { spacing } from '@/theme/tokens';
 import { greeting } from '@/utils/format';
 
 export default function HomeScreen() {
   const countryCode = useSettingsStore((s) => s.countryCode);
+  const t = useI18n();
   const [genre, setGenre] = useState<string | null>(null);
 
   const featured = useStations({ order: 'votes', limit: 10 });
@@ -21,7 +22,7 @@ export default function HomeScreen() {
 
   return (
     <Screen title="Wavely" subtitle={greeting()}>
-      <SectionTitle>Featured</SectionTitle>
+      <SectionTitle>{t.featured}</SectionTitle>
       {featured.isLoading ? (
         <StateView loading />
       ) : (
@@ -36,26 +37,26 @@ export default function HomeScreen() {
         />
       )}
 
-      <SectionTitle>Genres</SectionTitle>
+      <SectionTitle>{t.genres}</SectionTitle>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.bleed}
         contentContainerStyle={styles.chips}
       >
-        <Chip label="All" selected={genre === null} onPress={() => setGenre(null)} />
+        <Chip label={t.all} selected={genre === null} onPress={() => setGenre(null)} />
         {GENRES.map((g) => (
           <Chip key={g} label={capitalize(g)} selected={genre === g} onPress={() => setGenre(g)} />
         ))}
       </ScrollView>
 
-      <SectionTitle>Popular near you</SectionTitle>
+      <SectionTitle>{t.popularNearYou}</SectionTitle>
       {popular.isLoading ? (
         <StateView loading />
       ) : popular.isError ? (
-        <StateView icon="cloud-offline-outline" title="Couldn't load stations" onRetry={popular.refetch} />
+        <StateView icon="cloud-offline-outline" title={t.couldNotLoad} onRetry={popular.refetch} />
       ) : popular.data?.length === 0 ? (
-        <StateView title="No stations found" message="Try another genre." />
+        <StateView title={t.noResults} message={t.tryDifferent} />
       ) : (
         <View style={styles.list}>
           {popular.data?.map((s) => (

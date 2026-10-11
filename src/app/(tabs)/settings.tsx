@@ -5,20 +5,27 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 
 import { Screen, SectionTitle } from '@/components/screen';
 import { COUNTRIES } from '@/constants/catalog';
-import { useSettingsStore, type ThemePreference } from '@/store/settings-store';
+import { type Language } from '@/constants/i18n';
+import { useSettingsStore, useI18n, type ThemePreference } from '@/store/settings-store';
 import { useTheme } from '@/theme/theme-provider';
 import { radius, spacing } from '@/theme/tokens';
 import { logger, type LogEntry } from '@/utils/logger';
 
-const THEMES: { value: ThemePreference; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { value: 'light', label: 'Light', icon: 'sunny-outline' },
-  { value: 'dark', label: 'Dark', icon: 'moon-outline' },
-  { value: 'system', label: 'System', icon: 'phone-portrait-outline' },
+const THEMES: { value: ThemePreference; key: 'light' | 'dark' | 'system'; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { value: 'light', key: 'light', icon: 'sunny-outline' },
+  { value: 'dark', key: 'dark', icon: 'moon-outline' },
+  { value: 'system', key: 'system', icon: 'phone-portrait-outline' },
+];
+
+const LANGUAGES: { code: Language; label: string }[] = [
+  { code: 'tr', label: 'Türkçe' },
+  { code: 'en', label: 'English' },
 ];
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
-  const { theme, setTheme, countryCode, setCountryCode } = useSettingsStore();
+  const t = useI18n();
+  const { theme, setTheme, language, setLanguage, countryCode, setCountryCode } = useSettingsStore();
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [logs, setLogs] = useState<readonly LogEntry[]>([]);
 
@@ -28,26 +35,55 @@ export default function SettingsScreen() {
   };
 
   return (
-    <Screen title="Settings">
-      <SectionTitle>Appearance</SectionTitle>
+    <Screen title={t.settings}>
+      {/* Theme */}
+      <SectionTitle>{t.appearance}</SectionTitle>
       <View style={[styles.segment, { backgroundColor: colors.surfaceAlt }]}>
-        {THEMES.map((t) => {
-          const selected = theme === t.value;
+        {THEMES.map((item) => {
+          const selected = theme === item.value;
           return (
             <Pressable
-              key={t.value}
-              onPress={() => setTheme(t.value)}
+              key={item.value}
+              onPress={() => setTheme(item.value)}
               style={[styles.segmentItem, selected && { backgroundColor: colors.surface }]}
               accessibilityState={{ selected }}
             >
-              <Ionicons name={t.icon} size={18} color={selected ? colors.primary : colors.textMuted} />
-              <Text style={[styles.segmentLabel, { color: selected ? colors.text : colors.textMuted }]}>{t.label}</Text>
+              <Ionicons name={item.icon} size={18} color={selected ? colors.primary : colors.textMuted} />
+              <Text style={[styles.segmentLabel, { color: selected ? colors.text : colors.textMuted }]}>
+                {t[item.key]}
+              </Text>
             </Pressable>
           );
         })}
       </View>
 
-      <SectionTitle>Region</SectionTitle>
+      {/* Language */}
+      <SectionTitle>{t.language}</SectionTitle>
+      <View style={[styles.segment, { backgroundColor: colors.surfaceAlt }]}>
+        {LANGUAGES.map((item) => {
+          const selected = language === item.code;
+          return (
+            <Pressable
+              key={item.code}
+              onPress={() => setLanguage(item.code)}
+              style={[styles.segmentItem, selected && { backgroundColor: colors.surface }]}
+              accessibilityState={{ selected }}
+            >
+              <Ionicons
+                name="language-outline"
+                size={18}
+                color={selected ? colors.primary : colors.textMuted}
+              />
+              <Text style={[styles.segmentLabel, { color: selected ? colors.text : colors.textMuted }]}>
+                {item.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* Region */}
+      <SectionTitle>{t.region}</SectionTitle>
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         {COUNTRIES.map((c, i) => (
           <Pressable
@@ -61,19 +97,20 @@ export default function SettingsScreen() {
         ))}
       </View>
 
-      <SectionTitle>Diagnostics & Developer</SectionTitle>
+      {/* Diagnostics */}
+      <SectionTitle>{t.diagnostics}</SectionTitle>
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Pressable onPress={handleOpenLogs} style={styles.option}>
           <View style={styles.row}>
             <Ionicons name="terminal-outline" size={20} color={colors.primary} />
-            <Text style={[styles.optionLabel, { color: colors.text }]}>In-App Log Console</Text>
+            <Text style={[styles.optionLabel, { color: colors.text }]}>{t.inAppLogs}</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </Pressable>
       </View>
 
       <Text style={[styles.footer, { color: colors.textMuted }]}>
-        Wavely v{Constants.expoConfig?.version} · Stations by radio-browser.info
+        {t.appVersion}
       </Text>
 
       {/* Developer Log Modal */}
@@ -130,7 +167,7 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  segment: { flexDirection: 'row', padding: 4, borderRadius: radius.md },
+  segment: { flexDirection: 'row', padding: 4, borderRadius: radius.md, marginBottom: spacing.md },
   segmentItem: {
     flex: 1,
     flexDirection: 'row',
@@ -141,7 +178,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   segmentLabel: { fontSize: 14, fontWeight: '600' },
-  card: { borderRadius: radius.lg, borderWidth: 1, overflow: 'hidden' },
+  card: { borderRadius: radius.lg, borderWidth: 1, overflow: 'hidden', marginBottom: spacing.md },
   option: {
     flexDirection: 'row',
     justifyContent: 'space-between',

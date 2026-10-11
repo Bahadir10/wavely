@@ -17,27 +17,27 @@ export const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /**
  * Top globally renowned stations as fallback & instant display.
- * Guaranteed verified live streams from major worldwide networks (BBC, Virgin, Kiss, etc.).
+ * Direct rock-solid audio streams.
  */
 export const GLOBAL_FEATURED_STATIONS: Station[] = [
   {
-    stationuuid: 'bbc-world-service-uk',
-    name: 'BBC World Service',
-    url_resolved: 'https://stream.live.vc.bbcmedia.co.uk/bbc_world_service',
-    favicon: 'https://www.bbc.co.uk/favicon.ico',
-    tags: 'news,talk,world',
-    country: 'United Kingdom',
-    countrycode: 'GB',
-    language: 'English',
-    codec: 'MP3',
+    stationuuid: 'alem-fm-turkey',
+    name: 'Alem FM',
+    url_resolved: 'https://turkmedya.radyotvonline.net/alemfmaac',
+    favicon: 'https://www.alemfm.com/favicon.ico',
+    tags: 'pop,hits,turkish',
+    country: 'Türkiye',
+    countrycode: 'TR',
+    language: 'Turkish',
+    codec: 'AAC',
     bitrate: 128,
-    votes: 99999,
-    clickcount: 85000,
+    votes: 98000,
+    clickcount: 91000,
   },
   {
     stationuuid: 'virgin-radio-uk',
     name: 'Virgin Radio UK',
-    url_resolved: 'https://radio.virginradio.co.uk/stream',
+    url_resolved: 'https://virgin.live.stream.broadcasting.news/stream',
     favicon: 'https://virginradio.co.uk/favicon.ico',
     tags: 'rock,pop,hits',
     country: 'United Kingdom',
@@ -61,6 +61,20 @@ export const GLOBAL_FEATURED_STATIONS: Station[] = [
     bitrate: 128,
     votes: 89000,
     clickcount: 71000,
+  },
+  {
+    stationuuid: 'bbc-world-service-uk',
+    name: 'BBC World Service',
+    url_resolved: 'https://stream.live.vc.bbcmedia.co.uk/bbc_world_service',
+    favicon: 'https://www.bbc.co.uk/favicon.ico',
+    tags: 'news,talk,world',
+    country: 'United Kingdom',
+    countrycode: 'GB',
+    language: 'English',
+    codec: 'MP3',
+    bitrate: 128,
+    votes: 99999,
+    clickcount: 85000,
   },
   {
     stationuuid: 'jazz-radio-paris',

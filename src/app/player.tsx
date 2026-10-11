@@ -10,13 +10,19 @@ import { StationArtwork, gradientFor } from '@/components/station-artwork';
 import { Visualizer } from '@/components/visualizer';
 import { useFavoritesStore } from '@/store/favorites-store';
 import { usePlayerStore } from '@/store/player-store';
+import { useSavedSongsStore } from '@/store/saved-songs-store';
+import { useI18n } from '@/store/settings-store';
 import { radius, spacing } from '@/theme/tokens';
 import { formatTags } from '@/utils/format';
 
 export default function PlayerScreen() {
+  const t = useI18n();
   const { current, status, currentTrack, togglePlayback, stop } = usePlayerStore();
   const isFavorite = useFavoritesStore((s) => s.stations.some((f) => f.stationuuid === current?.stationuuid));
   const toggleFavorite = useFavoritesStore((s) => s.toggle);
+
+  const { saveSong, removeSong, isSongSaved } = useSavedSongsStore();
+  const songIsLiked = currentTrack ? isSongSaved(currentTrack.title, currentTrack.artist) : false;
 
   useEffect(() => {
     if (!current && router.canGoBack()) router.back();
@@ -27,6 +33,22 @@ export default function PlayerScreen() {
   const [from, to] = gradientFor(current.stationuuid);
   const details = [current.codec, current.bitrate ? `${current.bitrate} kbps` : null].filter(Boolean).join(' · ');
 
+  const handleToggleSongLike = () => {
+    if (!currentTrack || !current) return;
+    Haptics.selectionAsync();
+    if (songIsLiked) {
+      const songId = `${currentTrack.title}-${currentTrack.artist || ''}`.toLowerCase();
+      removeSong(songId);
+    } else {
+      saveSong({
+        title: currentTrack.title,
+        artist: currentTrack.artist,
+        stationName: current.name,
+        stationId: current.stationuuid,
+      });
+    }
+  };
+
   return (
     <LinearGradient colors={[from, to, '#0D0B14']} locations={[0, 0.45, 1]} style={styles.flex}>
       <SafeAreaView style={styles.flex}>
@@ -34,7 +56,7 @@ export default function PlayerScreen() {
           <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="Close player">
             <Ionicons name="chevron-down" size={30} color="#fff" />
           </Pressable>
-          <Text style={styles.topLabel}>NOW PLAYING</Text>
+          <Text style={styles.topLabel}>{t.nowPlaying}</Text>
           <Pressable
             onPress={() => {
               stop();
@@ -54,17 +76,17 @@ export default function PlayerScreen() {
 
           <View style={styles.liveBadge}>
             <View style={styles.liveDot} />
-            <Text style={styles.liveText}>LIVE BROADCAST</Text>
+            <Text style={styles.liveText}>{t.liveBroadcast}</Text>
           </View>
 
           <Text numberOfLines={1} style={styles.name}>
             {current.name.trim()}
           </Text>
 
-          {/* Currently playing song/artist banner */}
+          {/* Currently playing song/artist banner + LIKE SONG BUTTON */}
           {currentTrack ? (
             <View style={styles.songCard}>
-              <Ionicons name="musical-notes" size={16} color="#FF6B6B" />
+              <Ionicons name="musical-notes" size={18} color="#FF6B6B" />
               <View style={styles.songTextContainer}>
                 <Text numberOfLines={1} style={styles.songTitle}>
                   {currentTrack.title}
@@ -75,6 +97,18 @@ export default function PlayerScreen() {
                   </Text>
                 ) : null}
               </View>
+              <Pressable
+                onPress={handleToggleSongLike}
+                hitSlop={10}
+                style={[styles.likeSongBtn, songIsLiked && styles.likeSongBtnActive]}
+                accessibilityLabel="Like song"
+              >
+                <Ionicons
+                  name={songIsLiked ? 'heart' : 'heart-outline'}
+                  size={18}
+                  color={songIsLiked ? '#FF3B5C' : '#FFFFFF'}
+                />
+              </Pressable>
             </View>
           ) : (
             <Text numberOfLines={1} style={styles.meta}>
@@ -89,7 +123,7 @@ export default function PlayerScreen() {
           <Visualizer active={status === 'playing'} color="rgba(255,255,255,0.9)" bars={32} height={50} />
         </View>
 
-        {status === 'error' && <Text style={styles.error}>This stream is temporarily unreachable.</Text>}
+        {status === 'error' && <Text style={styles.error}>{t.streamUnavailable}</Text>}
 
         <View style={styles.controls}>
           <Pressable
@@ -160,16 +194,24 @@ const styles = StyleSheet.create({
   songCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    paddingHorizontal: 16,
+    gap: 10,
+    backgroundColor: 'rgba(0,0,0,0.38)',
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: radius.lg,
     maxWidth: '95%',
   },
-  songTextContainer: { alignItems: 'center' },
+  songTextContainer: { alignItems: 'center', flexShrink: 1 },
   songTitle: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
   songArtist: { color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '500' },
+  likeSongBtn: {
+    padding: 6,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  likeSongBtnActive: {
+    backgroundColor: 'rgba(255,255,255,0.9)',
+  },
   meta: { color: 'rgba(255,255,255,0.75)', fontSize: 15, fontWeight: '500' },
   details: { color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
   visualizer: { alignItems: 'center', marginTop: 'auto' },

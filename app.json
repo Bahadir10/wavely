@@ -7,6 +7,10 @@
     "icon": "./assets/images/wavely-icon.png",
     "scheme": "wavely",
     "userInterfaceStyle": "automatic",
+    "updates": {
+      "enabled": false,
+      "checkAutomatically": "NEVER"
+    },
     "ios": {
       "bundleIdentifier": "com.bahadir.wavely",
       "supportsTablet": true,
