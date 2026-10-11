@@ -1,56 +1,106 @@
-# Welcome to your Expo app 👋
+# 📻 Wavely — Modern Live Radio Streaming App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+<div align="center">
+  <img src="./assets/images/wavely-icon.png" width="128" height="128" alt="Wavely Logo" style="border-radius: 28px;" />
+  <h3>Experience radio stations from around the globe with a stunning, modern interface.</h3>
 
-## Get started
+  [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+  [![React Native](https://img.shields.io/badge/React%20Native-0.86-61DAFB?style=flat-square&logo=react&logoColor=black)](https://reactnative.dev/)
+  [![Expo](https://img.shields.io/badge/Expo-SDK%2057-000020?style=flat-square&logo=expo&logoColor=white)](https://expo.dev/)
+  [![Zustand](https://img.shields.io/badge/State-Zustand-orange?style=flat-square)](https://github.com/pmndrs/zustand)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
+</div>
 
-1. Install dependencies
+---
 
-   ```bash
-   npm install
-   ```
+## ✨ Features
 
-2. Start the app
+- 🌍 **30,000+ Stations Worldwide**: Powered by the decentralized Radio Browser API + curated global fallback stations (BBC World Service, Virgin Radio UK, Power FM, Jazz Radio Paris, Kiss FM, KEXP).
+- 🎨 **Sleek Dynamic UI**: Automatic Dark/Light/System theme with glassmorphic floating mini-player and animated equalizers.
+- ❤️ **Offline Favorites**: Persisted locally via AsyncStorage so your saved stations are always accessible.
+- 🔍 **Real-time Search & Filter**: Filter by station name, genre tags, and country with instant debouncing.
+- 📱 **Cross-Platform**: Designed and optimized for both iOS and Android.
+- 🛠 **Enterprise Diagnostics**: Built-in in-app diagnostic logger with level filtering (Info, Warn, Error).
+- 🧪 **Test Suite**: Comprehensive unit tests covering stores, API parsing, and helpers.
 
-   ```bash
-   npx expo start
-   ```
+---
 
-In the output, you'll find options to open the app in a
+## 🏗 Architecture & Tech Stack
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+| Layer | Technology |
+|---|---|
+| **Framework** | Expo SDK 57 (Expo Router file-based routing) |
+| **Language** | TypeScript (Strict mode) |
+| **State Management** | [Zustand](https://github.com/pmndrs/zustand) + AsyncStorage persist |
+| **Data Fetching** | [TanStack Query](https://tanstack.com/query) (React Query) |
+| **Audio Engine** | `expo-audio` with background playback support |
+| **Animations** | `react-native-reanimated` |
+| **Testing** | Jest + `@testing-library/react-native` + `jest-expo` |
+| **Linting & Code Style** | ESLint Flat Config + Prettier |
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+---
 
-## Get a fresh project
+## 🚀 Getting Started
 
-When you're ready, run:
+### Prerequisites
+- Node.js `>= 22`
+- npm or yarn
 
+### 1. Installation
 ```bash
-npm run reset-project
+git clone https://github.com/<your-username>/wavely.git
+cd wavely
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### 2. Run Locally
+```bash
+npm start
+```
+Scan the QR code with **Expo Go** on iOS or Android, or press `a` for Android Emulator / `i` for iOS Simulator.
 
-### Other setup steps
+### 3. Running Tests & Quality Checks
+```bash
+# Typecheck
+npm run typecheck
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+# Unit tests
+npm test
 
-## Learn more
+# Linting
+npm run lint
 
-To learn more about developing your project with Expo, look at the following resources:
+# Code formatting
+npm run format
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+---
 
-## Join the community
+## 📦 Building an Android APK
 
-Join our community of developers creating universal apps.
+### Option A: Cloud Build via EAS (Recommended)
+No local Android Studio or heavy SDK required.
+```bash
+# 1. Install EAS CLI
+npm install -g eas-cli
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+# 2. Login to Expo
+eas login
+
+# 3. Configure EAS Build
+eas build:configure
+
+# 4. Build a standalone APK (installable on any Android device)
+eas build -p android --profile preview
+```
+Once completed, EAS will provide a direct download link for your `.apk` file!
+
+### Option B: Local Android Build
+```bash
+npx expo run:android --variant release
+```
+
+---
+
+## 📄 License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
