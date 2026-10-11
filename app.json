@@ -1,37 +1,45 @@
 {
   "expo": {
-    "name": "radio-app",
-    "slug": "radio-app",
+    "name": "Wavely",
+    "slug": "wavely",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "radioapp",
+    "icon": "./assets/images/wavely-icon.png",
+    "scheme": "wavely",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "bundleIdentifier": "com.bahadir.wavely",
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIBackgroundModes": ["audio"]
+      }
     },
     "android": {
+      "package": "com.bahadir.wavely",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#6C3BFF",
+        "foregroundImage": "./assets/images/wavely-icon.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/wavely-icon.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "backgroundColor": "#6C3BFF",
+          "image": "./assets/images/wavely-icon.png",
+          "imageWidth": 120,
+          "dark": { "backgroundColor": "#0D0B14", "image": "./assets/images/wavely-icon.png" }
         }
+      ],
+      [
+        "expo-audio",
+        { "enableBackgroundPlayback": true }
       ]
     ],
     "experiments": {
