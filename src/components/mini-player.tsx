@@ -14,9 +14,19 @@ export function MiniPlayer() {
   const { colors, isDark } = useTheme();
   const current = usePlayerStore((s) => s.current);
   const status = usePlayerStore((s) => s.status);
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
   const toggle = usePlayerStore((s) => s.togglePlayback);
 
   if (!current) return null;
+
+  const subtitle =
+    currentTrack?.title
+      ? `${currentTrack.title}${currentTrack.artist ? ` - ${currentTrack.artist}` : ''}`
+      : status === 'error'
+      ? 'Stream unavailable'
+      : status === 'loading'
+      ? 'Connecting…'
+      : 'Live';
 
   return (
     <Pressable onPress={() => router.push('/player')} style={styles.wrapper} accessibilityLabel="Open player">
@@ -32,8 +42,8 @@ export function MiniPlayer() {
           </Text>
           <View style={styles.statusRow}>
             <Visualizer active={status === 'playing'} color={colors.primary} bars={8} height={12} />
-            <Text style={[styles.status, { color: colors.textMuted }]}>
-              {status === 'error' ? 'Stream unavailable' : status === 'loading' ? 'Connecting…' : 'Live'}
+            <Text numberOfLines={1} style={[styles.status, { color: colors.textMuted }]}>
+              {subtitle}
             </Text>
           </View>
         </View>
@@ -68,7 +78,7 @@ const styles = StyleSheet.create({
   },
   info: { flex: 1, gap: 4 },
   name: { fontSize: 15, fontWeight: '700' },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  status: { fontSize: 12, fontWeight: '600' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, overflow: 'hidden' },
+  status: { fontSize: 12, fontWeight: '600', flex: 1 },
   button: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
 });

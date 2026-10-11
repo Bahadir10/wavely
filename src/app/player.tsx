@@ -14,11 +14,10 @@ import { radius, spacing } from '@/theme/tokens';
 import { formatTags } from '@/utils/format';
 
 export default function PlayerScreen() {
-  const { current, status, togglePlayback, stop } = usePlayerStore();
+  const { current, status, currentTrack, togglePlayback, stop } = usePlayerStore();
   const isFavorite = useFavoritesStore((s) => s.stations.some((f) => f.stationuuid === current?.stationuuid));
   const toggleFavorite = useFavoritesStore((s) => s.toggle);
 
-  // Close the modal if playback was stopped elsewhere.
   useEffect(() => {
     if (!current && router.canGoBack()) router.back();
   }, [current]);
@@ -50,28 +49,47 @@ export default function PlayerScreen() {
 
         <View style={styles.center}>
           <View style={styles.artShadow}>
-            <StationArtwork station={current} size={260} rounded={radius.xl} />
+            <StationArtwork station={current} size={240} rounded={radius.xl} />
           </View>
 
           <View style={styles.liveBadge}>
             <View style={styles.liveDot} />
-            <Text style={styles.liveText}>LIVE</Text>
+            <Text style={styles.liveText}>LIVE BROADCAST</Text>
           </View>
 
-          <Text numberOfLines={2} style={styles.name}>
+          <Text numberOfLines={1} style={styles.name}>
             {current.name.trim()}
           </Text>
-          <Text numberOfLines={1} style={styles.meta}>
-            {[current.country, formatTags(current.tags)].filter(Boolean).join(' · ')}
-          </Text>
+
+          {/* Currently playing song/artist banner */}
+          {currentTrack ? (
+            <View style={styles.songCard}>
+              <Ionicons name="musical-notes" size={16} color="#FF6B6B" />
+              <View style={styles.songTextContainer}>
+                <Text numberOfLines={1} style={styles.songTitle}>
+                  {currentTrack.title}
+                </Text>
+                {currentTrack.artist ? (
+                  <Text numberOfLines={1} style={styles.songArtist}>
+                    {currentTrack.artist}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          ) : (
+            <Text numberOfLines={1} style={styles.meta}>
+              {[current.country, formatTags(current.tags)].filter(Boolean).join(' · ')}
+            </Text>
+          )}
+
           {!!details && <Text style={styles.details}>{details.toUpperCase()}</Text>}
         </View>
 
         <View style={styles.visualizer}>
-          <Visualizer active={status === 'playing'} color="rgba(255,255,255,0.9)" bars={32} height={56} />
+          <Visualizer active={status === 'playing'} color="rgba(255,255,255,0.9)" bars={32} height={50} />
         </View>
 
-        {status === 'error' && <Text style={styles.error}>This stream is currently unavailable.</Text>}
+        {status === 'error' && <Text style={styles.error}>This stream is temporarily unreachable.</Text>}
 
         <View style={styles.controls}>
           <Pressable
@@ -117,7 +135,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
   topLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '700', letterSpacing: 2 },
-  center: { alignItems: 'center', paddingHorizontal: spacing.xl, marginTop: spacing.xxl, gap: spacing.sm },
+  center: { alignItems: 'center', paddingHorizontal: spacing.xl, marginTop: spacing.xl, gap: spacing.sm },
   artShadow: {
     borderRadius: radius.xl,
     shadowColor: '#000',
@@ -125,7 +143,7 @@ const styles = StyleSheet.create({
     shadowRadius: 30,
     shadowOffset: { width: 0, height: 16 },
     elevation: 16,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   liveBadge: {
     flexDirection: 'row',
@@ -138,7 +156,20 @@ const styles = StyleSheet.create({
   },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff' },
   liveText: { color: '#fff', fontSize: 11, fontWeight: '800', letterSpacing: 1 },
-  name: { color: '#fff', fontSize: 26, fontWeight: '800', textAlign: 'center' },
+  name: { color: '#fff', fontSize: 24, fontWeight: '800', textAlign: 'center' },
+  songCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: radius.lg,
+    maxWidth: '95%',
+  },
+  songTextContainer: { alignItems: 'center' },
+  songTitle: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  songArtist: { color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '500' },
   meta: { color: 'rgba(255,255,255,0.75)', fontSize: 15, fontWeight: '500' },
   details: { color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
   visualizer: { alignItems: 'center', marginTop: 'auto' },
@@ -148,12 +179,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.xxl,
+    paddingVertical: spacing.xl,
   },
   playButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
