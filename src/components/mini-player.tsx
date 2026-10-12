@@ -31,7 +31,12 @@ export function MiniPlayer() {
       : t.live;
 
   return (
-    <Pressable onPress={() => router.push('/player')} style={styles.wrapper} accessibilityLabel="Open player">
+    <Pressable
+      onPress={() => router.push('/player')}
+      style={styles.wrapper}
+      accessibilityLabel="Open player"
+      testID="mini-player"
+    >
       <BlurView
         intensity={Platform.OS === 'ios' ? 60 : 0}
         tint={isDark ? 'dark' : 'light'}
@@ -54,6 +59,7 @@ export function MiniPlayer() {
           hitSlop={10}
           style={[styles.button, { backgroundColor: colors.primary }]}
           accessibilityLabel={status === 'playing' ? 'Pause' : 'Play'}
+          testID="mini-player-toggle"
         >
           {status === 'loading' ? (
             <ActivityIndicator color="#fff" size="small" />

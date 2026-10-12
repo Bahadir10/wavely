@@ -27,6 +27,7 @@ export function StationRow({ station, queue }: { station: Station; queue?: Stati
       ]}
       accessibilityRole="button"
       accessibilityLabel={`Play ${station.name}`}
+      testID="station-row"
     >
       <StationArtwork station={station} size={52} />
       <View style={styles.info}>
@@ -44,6 +45,7 @@ export function StationRow({ station, queue }: { station: Station; queue?: Stati
           toggleFavorite(station);
         }}
         accessibilityLabel={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+        testID="station-favorite-btn"
       >
         <Ionicons
           name={isFavorite ? 'heart' : 'heart-outline'}

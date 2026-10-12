@@ -48,6 +48,7 @@ export default function SearchScreen() {
           autoCorrect={false}
           returnKeyType="search"
           clearButtonMode="while-editing"
+          testID="search-input"
         />
       </View>
 

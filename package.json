@@ -61,6 +61,7 @@
     "build:apk:local": "npx --yes eas-cli build --profile preview --platform android --local",
     "lint": "expo lint",
     "test": "jest",
+    "test:e2e": "maestro test .maestro/",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write ."
   },

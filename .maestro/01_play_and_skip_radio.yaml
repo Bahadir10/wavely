@@ -1,0 +1,39 @@
+appId: com.bahadir.wavely
+---
+# Flow 1: Play Station, Open Full Player, Test Next/Previous Controls
+- launchApp
+
+# 1. Wait for stations to load and tap the first station
+- assertVisible:
+    id: "station-row"
+- tapOn:
+    id: "station-row"
+    index: 0
+
+# 2. Mini player should appear on the bottom; tap to open Full Player
+- assertVisible:
+    id: "mini-player"
+- tapOn:
+    id: "mini-player"
+
+# 3. Verify all player controls are present
+- assertVisible:
+    id: "btn-play-pause"
+- assertVisible:
+    id: "btn-play-next"
+- assertVisible:
+    id: "btn-play-previous"
+- assertVisible:
+    id: "btn-favorite"
+
+# 4. Tap Next station to skip forward
+- tapOn:
+    id: "btn-play-next"
+
+# 5. Tap Play/Pause button
+- tapOn:
+    id: "btn-play-pause"
+
+# 6. Close the player modal
+- tapOn:
+    id: "btn-close-player"

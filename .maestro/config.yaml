@@ -1,0 +1,4 @@
+appId: com.bahadir.wavely
+flows:
+  - 01_play_and_skip_radio.yaml
+  - 02_search_and_favorite.yaml

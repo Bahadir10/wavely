@@ -112,7 +112,7 @@ export default function PlayerScreen() {
         )}
 
         <View style={styles.topBar}>
-          <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="Close player">
+          <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="Close player" testID="btn-close-player">
             <Ionicons name="chevron-down" size={30} color="#fff" />
           </Pressable>
           <Text style={styles.topLabel}>{t.nowPlaying}</Text>
@@ -248,6 +248,7 @@ export default function PlayerScreen() {
             }}
             hitSlop={12}
             accessibilityLabel={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+            testID="btn-favorite"
           >
             <Ionicons
               name={isFavorite ? 'heart' : 'heart-outline'}
@@ -263,6 +264,7 @@ export default function PlayerScreen() {
             }}
             hitSlop={12}
             accessibilityLabel="Previous station"
+            testID="btn-play-previous"
           >
             <Ionicons name="play-skip-back" size={28} color="#fff" />
           </Pressable>
@@ -274,6 +276,7 @@ export default function PlayerScreen() {
             }}
             style={({ pressed }) => [styles.playButton, pressed && { transform: [{ scale: 0.94 }] }]}
             accessibilityLabel={status === 'playing' ? 'Pause' : 'Play'}
+            testID="btn-play-pause"
           >
             {status === 'loading' ? (
               <ActivityIndicator color="#16131F" />
@@ -289,11 +292,12 @@ export default function PlayerScreen() {
             }}
             hitSlop={12}
             accessibilityLabel="Next station"
+            testID="btn-play-next"
           >
             <Ionicons name="play-skip-forward" size={28} color="#fff" />
           </Pressable>
 
-          <Pressable onPress={handleShareStation} hitSlop={12} accessibilityLabel="Share">
+          <Pressable onPress={handleShareStation} hitSlop={12} accessibilityLabel="Share" testID="btn-share">
             <Ionicons name="share-social-outline" size={26} color="rgba(255,255,255,0.85)" />
           </Pressable>
         </View>

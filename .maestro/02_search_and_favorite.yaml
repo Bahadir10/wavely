@@ -1,0 +1,32 @@
+appId: com.bahadir.wavely
+---
+# Flow 2: Search Station and Add to Favorites
+- launchApp
+
+# 1. Switch to Search tab
+- assertVisible:
+    id: "tab-search"
+- tapOn:
+    id: "tab-search"
+
+# 2. Type "Power" into search input
+- assertVisible:
+    id: "search-input"
+- tapOn:
+    id: "search-input"
+- inputText: "Power"
+
+# 3. Favorite the first search result
+- assertVisible:
+    id: "station-favorite-btn"
+- tapOn:
+    id: "station-favorite-btn"
+    index: 0
+
+# 4. Switch to Favorites tab
+- tapOn:
+    id: "tab-favorites"
+
+# 5. Verify the favorited station appears in the list
+- assertVisible:
+    id: "station-row"

@@ -67,6 +67,7 @@ function TabBar({ state, descriptors, navigation }: TabBarProps) {
               accessibilityRole="tab"
               accessibilityState={{ selected: focused }}
               accessibilityLabel={label}
+              testID={`tab-${route.name}`}
             >
               <Ionicons name={focused ? activeIcon : icon} size={24} color={color} />
               <Text style={[styles.label, { color }]}>{label}</Text>
