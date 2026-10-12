@@ -26,7 +26,7 @@ import { formatTags } from '@/utils/format';
 
 export default function PlayerScreen() {
   const t = useI18n();
-  const { current, status, currentTrack, togglePlayback, stop, refreshTrack } = usePlayerStore();
+  const { current, status, currentTrack, play, togglePlayback, stop, refreshTrack } = usePlayerStore();
   const isFavorite = useFavoritesStore((s) => s.stations.some((f) => f.stationuuid === current?.stationuuid));
   const toggleFavorite = useFavoritesStore((s) => s.toggle);
 
@@ -221,7 +221,23 @@ export default function PlayerScreen() {
           <Visualizer active={status === 'playing'} color="rgba(255,255,255,0.9)" bars={32} height={46} />
         </View>
 
-        {status === 'error' && <Text style={styles.error}>{t.streamUnavailable}</Text>}
+        {status === 'error' && (
+          <View style={styles.errorCard}>
+            <Ionicons name="cloud-offline-outline" size={18} color="#FF6B6B" />
+            <Text style={styles.error}>{t.streamDisconnected}</Text>
+            <Pressable
+              onPress={() => {
+                Haptics.selectionAsync();
+                play(current);
+              }}
+              style={styles.reconnectBtn}
+              hitSlop={8}
+              accessibilityLabel={t.reconnect}
+            >
+              <Text style={styles.reconnectBtnText}>{t.reconnect}</Text>
+            </Pressable>
+          </View>
+        )}
 
         <View style={styles.controls}>
           <Pressable
@@ -367,7 +383,27 @@ const styles = StyleSheet.create({
   meta: { color: 'rgba(255,255,255,0.75)', fontSize: 14, fontWeight: '500' },
   details: { color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
   visualizer: { alignItems: 'center', marginTop: 'auto' },
-  error: { color: '#FFB4B4', textAlign: 'center', marginTop: spacing.md },
+  errorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+    marginTop: spacing.md,
+  },
+  error: { color: '#FFB4B4', fontSize: 13, fontWeight: '600' },
+  reconnectBtn: {
+    backgroundColor: '#FF3B5C',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    marginLeft: 4,
+  },
+  reconnectBtnText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
   controls: {
     flexDirection: 'row',
     alignItems: 'center',

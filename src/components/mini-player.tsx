@@ -3,6 +3,7 @@ import { BlurView } from 'expo-blur';
 import { router } from 'expo-router';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { useI18n } from '@/store/settings-store';
 import { usePlayerStore } from '@/store/player-store';
 import { useTheme } from '@/theme/theme-provider';
 import { radius, spacing } from '@/theme/tokens';
@@ -12,6 +13,7 @@ import { Visualizer } from './visualizer';
 /** Floating player shown above the tab bar while a station is selected. */
 export function MiniPlayer() {
   const { colors, isDark } = useTheme();
+  const t = useI18n();
   const current = usePlayerStore((s) => s.current);
   const status = usePlayerStore((s) => s.status);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
@@ -23,10 +25,10 @@ export function MiniPlayer() {
     currentTrack?.title
       ? `${currentTrack.title}${currentTrack.artist ? ` - ${currentTrack.artist}` : ''}`
       : status === 'error'
-      ? 'Stream unavailable'
+      ? t.streamDisconnected
       : status === 'loading'
-      ? 'Connecting…'
-      : 'Live';
+      ? t.connecting
+      : t.live;
 
   return (
     <Pressable onPress={() => router.push('/player')} style={styles.wrapper} accessibilityLabel="Open player">

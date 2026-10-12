@@ -1,9 +1,14 @@
-import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
+import {
+  createAudioPlayer,
+  requestNotificationPermissionsAsync,
+  setAudioModeAsync,
+  type AudioPlayer,
+} from 'expo-audio';
 import { create } from 'zustand';
 
 import type { Station } from '@/api/types';
-import { fetchCurrentTrack, type NowPlayingTrack } from '@/utils/metadata';
 import { logger } from '@/utils/logger';
+import { fetchCurrentTrack, type NowPlayingTrack } from '@/utils/metadata';
 
 export type PlaybackStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
 
@@ -98,20 +103,59 @@ function normalizeStreamUrl(station: Station): string[] {
 
 async function getPlayer(): Promise<AudioPlayer> {
   if (player) return player;
+
+  try {
+    await requestNotificationPermissionsAsync();
+  } catch (err) {
+    logger.debug('AUDIO', 'Notification permission check skipped', err);
+  }
+
   try {
     await setAudioModeAsync({
       playsInSilentMode: true,
       shouldPlayInBackground: true,
       interruptionMode: 'doNotMix',
     });
-    logger.info('AUDIO', 'Audio mode configured successfully');
+    logger.info('AUDIO', 'Audio mode configured successfully with background playback');
   } catch (err) {
     logger.warn('AUDIO', 'Failed to configure audio mode', err);
   }
 
   try {
-    player = createAudioPlayer(null);
-    logger.info('AUDIO', 'Audio player created');
+    player = createAudioPlayer(null, {
+      keepAudioSessionActive: true,
+      preferredForwardBufferDuration: 10,
+      updateInterval: 1000,
+    });
+
+    // Handle background status updates, lock screen controls, and stream dropouts
+    player.addListener('playbackStatusUpdate', (status) => {
+      const state = usePlayerStore.getState();
+
+      if (status.playbackState === 'failed' || status.playbackState === 'error') {
+        logger.warn('PLAYER', 'Stream playback error or disconnect detected', status);
+        usePlayerStore.setState({
+          status: 'error',
+          errorMessage: 'Stream connection lost',
+        });
+      } else if (status.didJustFinish && state.status === 'playing') {
+        logger.warn('PLAYER', 'Stream finished or disconnected unexpectedly');
+        usePlayerStore.setState({
+          status: 'paused',
+          errorMessage: 'Stream connection lost',
+        });
+      } else if (!status.playing && state.status === 'playing') {
+        // Paused from lock screen controls, headphones unplugged, or system interruption
+        logger.info('PLAYER', 'Playback paused externally via lock screen or system');
+        usePlayerStore.setState({ status: 'paused' });
+      } else if (status.playing && state.status === 'paused') {
+        // Resumed from lock screen controls
+        logger.info('PLAYER', 'Playback resumed externally via lock screen');
+        usePlayerStore.setState({ status: 'playing', errorMessage: null });
+      }
+    });
+
+    logger.info('AUDIO', 'Audio player created with lock screen & event listeners');
     return player;
   } catch (err) {
     logger.error('AUDIO', 'Failed to create audio player', err);
@@ -156,18 +200,56 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
         success = true;
         logger.info('PLAYER', `Playback started successfully with: ${streamUrl}`);
 
+        // Activate Lock Screen Media Controls for sustained background playback & control
+        try {
+          p.setActiveForLockScreen(
+            true,
+            {
+              title: station.name,
+              artist: 'Wavely Live Radio',
+              albumTitle: station.name,
+              artworkUrl: station.favicon,
+            },
+            {
+              isLiveStream: true,
+              showSeekForward: false,
+              showSeekBackward: false,
+            }
+          );
+        } catch (lockErr) {
+          logger.warn('PLAYER', 'Failed to configure lock screen controls', lockErr);
+        }
+
         // Immediate track fetch + periodic polling
         fetchCurrentTrack(streamUrl, station.name).then((track) => {
           if (track) {
             set({ currentTrack: track });
             logger.info('METADATA', `Now playing track identified: ${track.title} - ${track.artist || ''}`);
+            try {
+              p.updateLockScreenMetadata({
+                title: track.title,
+                artist: track.artist || station.name,
+                albumTitle: station.name,
+                artworkUrl: track.artwork || station.favicon,
+              });
+            } catch {}
           }
         });
 
         metadataTimer = setInterval(async () => {
           if (get().status === 'playing') {
             const track = await fetchCurrentTrack(streamUrl, get().current?.name || station.name);
-            if (track) set({ currentTrack: track });
+            if (track) {
+              set({ currentTrack: track });
+              try {
+                p.updateLockScreenMetadata({
+                  title: track.title,
+                  artist: track.artist || station.name,
+                  albumTitle: station.name,
+                  artworkUrl: track.artwork || station.favicon,
+                });
+              } catch {}
+            }
           }
         }, 12000);
 
@@ -186,7 +268,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
   },
 
   togglePlayback: async () => {
-    const { status, current } = get();
+    const { status, current, currentTrack } = get();
     if (!current) return;
 
     logger.info('PLAYER', `Toggle playback from state: ${status}`);
@@ -201,6 +283,22 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
         const candidateUrls = normalizeStreamUrl(current);
         p.replace({ uri: candidateUrls[0] });
         p.play();
+        try {
+          p.setActiveForLockScreen(
+            true,
+            {
+              title: currentTrack?.title || current.name,
+              artist: currentTrack?.artist || current.name,
+              albumTitle: current.name,
+              artworkUrl: currentTrack?.artwork || current.favicon,
+            },
+            {
+              isLiveStream: true,
+              showSeekForward: false,
+              showSeekBackward: false,
+            }
+          );
+        } catch {}
         set({ status: 'playing', errorMessage: null });
         logger.info('PLAYER', 'Playback resumed');
       }
@@ -215,7 +313,17 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     if (!current) return;
     const candidates = normalizeStreamUrl(current);
     const track = await fetchCurrentTrack(candidates[0], current.name);
-    if (track) set({ currentTrack: track });
+    if (track) {
+      set({ currentTrack: track });
+      try {
+        player?.updateLockScreenMetadata({
+          title: track.title,
+          artist: track.artist || current.name,
+          albumTitle: current.name,
+          artworkUrl: track.artwork || current.favicon,
+        });
+      } catch {}
+    }
   },
 
   stop: () => {
@@ -225,9 +333,11 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
       metadataTimer = null;
     }
     try {
+      player?.clearLockScreenControls();
+      player?.setActiveForLockScreen(false);
       player?.pause();
     } catch (err) {
-      logger.warn('PLAYER', 'Error pausing player on stop', err);
+      logger.warn('PLAYER', 'Error clearing player on stop', err);
     }
     set({ current: null, status: 'idle', errorMessage: null, currentTrack: null });
   },
