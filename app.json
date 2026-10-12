@@ -17,11 +17,15 @@
       "infoPlist": {
         "UIBackgroundModes": [
           "audio"
-        ]
+        ],
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
       }
     },
     "android": {
       "package": "com.bahadir.wavely",
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "backgroundColor": "#6C3BFF",
         "foregroundImage": "./assets/images/wavely-icon.png"

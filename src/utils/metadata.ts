@@ -3,139 +3,22 @@ import { logger } from '@/utils/logger';
 export interface NowPlayingTrack {
   title: string;
   artist?: string;
+  artwork?: string;
   raw: string;
 }
 
-/**
- * Universal Radio Song & Artist extractor:
- * 1. Checks Icecast status-json.xsl / status.xsl
- * 2. Checks Shoutcast 7.html
- * 3. Inspects in-stream ICY metadata (Icy-MetaData: 1 byte-aligned streamtitle)
- */
-export async function fetchCurrentTrack(streamUrl: string): Promise<NowPlayingTrack | null> {
-  if (!streamUrl) return null;
-
-  // 1. Try ICY In-Stream Header & Metadata Byte extraction (Works on 90%+ Shoutcast/Icecast stations)
-  try {
-    const icyTrack = await extractIcyStreamTitle(streamUrl);
-    if (icyTrack) return icyTrack;
-  } catch (err) {
-    logger.debug('METADATA', 'ICY probe skipped/failed', err);
-  }
-
-  // 2. Try Icecast status-json.xsl endpoint
-  try {
-    const url = new URL(streamUrl);
-    const origin = url.origin;
-    const pathname = url.pathname.replace(/\/+$/, '');
-
-    try {
-      const icecastUrl = `${origin}/status-json.xsl`;
-      const res = await fetch(icecastUrl, {
-        headers: { Accept: 'application/json' },
-        signal: AbortSignal.timeout(3000),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        const sources = json.icestats?.source;
-        const sourceList = Array.isArray(sources) ? sources : sources ? [sources] : [];
-        const match = sourceList.find((s: { listenurl?: string }) => s.listenurl?.includes(pathname)) || sourceList[0];
-        const titleStr = match?.title || match?.yp_currently_playing;
-        if (titleStr && typeof titleStr === 'string' && titleStr.trim().length > 1) {
-          return parseTrackTitle(titleStr);
-        }
-      }
-    } catch {
-      // Ignore
-    }
-
-    // 3. Try Shoutcast 7.html endpoint
-    try {
-      const shoutcastUrl = `${origin}${pathname}/7.html`;
-      const res = await fetch(shoutcastUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-        signal: AbortSignal.timeout(3000),
-      });
-      if (res.ok) {
-        const text = await res.text();
-        const parts = text.split(',');
-        if (parts.length >= 7) {
-          const songTitle = parts.slice(6).join(',').replace(/<\/?[^>]+(>|$)/g, '').trim();
-          if (songTitle && songTitle.length > 1) {
-            return parseTrackTitle(songTitle);
-          }
-        }
-      }
-    } catch {
-      // Ignore
-    }
-  } catch (err) {
-    logger.debug('METADATA', 'Track metadata probe error', err);
-  }
-
-  return null;
-}
-
-/**
- * Probes the stream with Icy-MetaData: 1 to extract StreamTitle from the first audio block.
- */
-async function extractIcyStreamTitle(streamUrl: string): Promise<NowPlayingTrack | null> {
-  try {
-    const res = await fetch(streamUrl, {
-      headers: {
-        'Icy-MetaData': '1',
-        'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18',
-      },
-      signal: AbortSignal.timeout(4000),
-    });
-
-    const metaintHeader = res.headers.get('icy-metaint');
-    if (!metaintHeader || !res.body) return null;
-
-    const metaint = parseInt(metaintHeader, 10);
-    if (isNaN(metaint) || metaint <= 0) return null;
-
-    const reader = res.body.getReader();
-    let bytesRead = 0;
-    const chunks: Uint8Array[] = [];
-
-    // Read until we reach the metadata block at `metaint`
-    while (bytesRead < metaint + 4096) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      bytesRead += value.length;
-    }
-    reader.cancel();
-
-    const fullBuffer = new Uint8Array(bytesRead);
-    let offset = 0;
-    for (const chunk of chunks) {
-      fullBuffer.set(chunk, offset);
-      offset += chunk.length;
-    }
-
-    if (fullBuffer.length > metaint) {
-      const lenByte = fullBuffer[metaint];
-      const metaLength = lenByte * 16;
-      if (metaLength > 0 && fullBuffer.length >= metaint + 1 + metaLength) {
-        const metaBytes = fullBuffer.slice(metaint + 1, metaint + 1 + metaLength);
-        const metaString = new TextDecoder().decode(metaBytes);
-        const match = metaString.match(/StreamTitle='([^']*)'/);
-        if (match && match[1] && match[1].trim().length > 1) {
-          return parseTrackTitle(match[1]);
-        }
-      }
-    }
-  } catch {
-    // Non-fatal probe failure
-  }
-  return null;
+function decodeEntities(str: string): string {
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&apos;/g, "'");
 }
 
 export function parseTrackTitle(raw: string): NowPlayingTrack {
-  const cleaned = raw.replace(/\s+/g, ' ').trim();
-  // Format: "Artist - Title" or "Artist - Song" or "Artist / Song"
+  const cleaned = decodeEntities(raw.replace(/\s+/g, ' ').trim());
   if (cleaned.includes(' - ')) {
     const parts = cleaned.split(' - ');
     return {
@@ -156,4 +39,146 @@ export function parseTrackTitle(raw: string): NowPlayingTrack {
     title: cleaned,
     raw: cleaned,
   };
+}
+
+/**
+ * Universal Radio Song & Artist extractor:
+ * 1. Triton Digital NowPlaying API (Süper FM, Virgin Radio TR, Joy Türk, Metro FM, etc.)
+ * 2. Shoutcast DNAS /currentsong?sid=1 & /stats?sid=1&json=1 (Arabesk FM, etc.)
+ * 3. Icecast status-json.xsl (Alem FM, Slow Türk, Kiss FM Berlin, etc.)
+ * 4. Shoutcast legacy 7.html
+ */
+export async function fetchCurrentTrack(
+  streamUrl: string,
+  stationName: string = ''
+): Promise<NowPlayingTrack | null> {
+  if (!streamUrl) return null;
+
+  // 1. Triton Digital NowPlaying Check (Mount-based)
+  try {
+    let tritonMount: string | null = null;
+    const lowerName = (stationName || '').toLowerCase();
+    const lowerUrl = streamUrl.toLowerCase();
+
+    if (lowerName.includes('super fm') || lowerUrl.includes('super_fm')) tritonMount = 'SUPER_FM';
+    else if (lowerName.includes('virgin radio') || lowerUrl.includes('virgin_radio')) tritonMount = 'VIRGIN_RADIO';
+    else if (lowerName.includes('joy türk') || lowerName.includes('joy turk') || lowerUrl.includes('joy_turk')) tritonMount = 'JOY_TURK';
+    else if (lowerName.includes('metro fm') || lowerUrl.includes('metro_fm')) tritonMount = 'METRO_FM';
+    else if (lowerUrl.includes('streamtheworld.com')) {
+      const match = streamUrl.match(/(?:livestream-redirect\/|\/)([A-Za-z0-9_]+)(?:_SC)?(?:\.mp3|\?|$)/i);
+      if (match && match[1]) {
+        tritonMount = match[1].replace(/_SC$/i, '');
+      }
+    }
+
+    if (tritonMount) {
+      const tritonUrl = `https://np.tritondigital.com/public/nowplaying?mountName=${tritonMount}&numberToFetch=1`;
+      const res = await fetch(tritonUrl, { signal: AbortSignal.timeout(3000) });
+      if (res.ok) {
+        const xml = await res.text();
+        const titleMatch = xml.match(/<property name="cue_title"><!\[CDATA\[(.*?)\]\]><\/property>/);
+        const artistMatch = xml.match(/<property name="track_artist_name"><!\[CDATA\[(.*?)\]\]><\/property>/);
+        const coverMatch = xml.match(/<property name="track_cover_url"><!\[CDATA\[(.*?)\]\]><\/property>/);
+        if (titleMatch && titleMatch[1] && titleMatch[1].trim().length > 1) {
+          const title = decodeEntities(titleMatch[1].trim());
+          const artist = artistMatch && artistMatch[1] ? decodeEntities(artistMatch[1].trim()) : undefined;
+          return {
+            title,
+            artist,
+            artwork: coverMatch ? coverMatch[1].trim() : undefined,
+            raw: artist ? `${artist} - ${title}` : title,
+          };
+        }
+      }
+    }
+  } catch (err) {
+    logger.debug('METADATA', 'Triton probe skipped/failed', err);
+  }
+
+  // 2. Shoutcast & Icecast Origin-based Checks
+  try {
+    const url = new URL(streamUrl);
+    const origin = url.origin;
+
+    // 2a. Shoutcast /currentsong?sid=1 (Arabesk FM)
+    try {
+      const shoutcastSongUrl = `${origin}/currentsong?sid=1`;
+      const res = await fetch(shoutcastSongUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (res.ok) {
+        const text = (await res.text()).trim();
+        if (text && !text.startsWith('<html') && !text.startsWith('<!DOCTYPE') && text.length > 1) {
+          return parseTrackTitle(text);
+        }
+      }
+    } catch {}
+
+    // 2b. Shoutcast /stats?sid=1&json=1
+    try {
+      const shoutcastStatsUrl = `${origin}/stats?sid=1&json=1`;
+      const res = await fetch(shoutcastStatsUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as { songtitle?: string };
+        if (json.songtitle && typeof json.songtitle === 'string' && json.songtitle.trim().length > 1) {
+          return parseTrackTitle(json.songtitle);
+        }
+      }
+    } catch {}
+
+    // 2c. Icecast /status-json.xsl (Alem FM, Slow Türk, etc.)
+    try {
+      const icecastUrl = `${origin}/status-json.xsl`;
+      const res = await fetch(icecastUrl, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as {
+          icestats?: {
+            source?:
+              | { listenurl?: string; title?: string; yp_currently_playing?: string }
+              | Array<{ listenurl?: string; title?: string; yp_currently_playing?: string }>;
+          };
+        };
+        const sources = json.icestats?.source;
+        const sourceList = Array.isArray(sources) ? sources : sources ? [sources] : [];
+        const pathname = url.pathname.replace(/\/+$/, '');
+        const match =
+          sourceList.find((s) => s.listenurl?.includes(pathname)) ||
+          sourceList[0];
+        const titleStr = match?.title || match?.yp_currently_playing;
+        if (titleStr && typeof titleStr === 'string' && titleStr.trim().length > 1) {
+          return parseTrackTitle(titleStr);
+        }
+      }
+    } catch {}
+
+    // 2d. Shoutcast legacy /7.html
+    try {
+      const shoutcastUrl = `${origin}/7.html`;
+      const res = await fetch(shoutcastUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (res.ok) {
+        const text = await res.text();
+        const parts = text.split(',');
+        if (parts.length >= 7) {
+          const songTitle = parts.slice(6).join(',').replace(/<\/?[^>]+(>|$)/g, '').trim();
+          if (songTitle && songTitle.length > 1) {
+            return parseTrackTitle(songTitle);
+          }
+        }
+      }
+    } catch {}
+  } catch (err) {
+    logger.debug('METADATA', 'Track metadata probe error', err);
+  }
+
+  return null;
 }

@@ -25,6 +25,11 @@ export default function FavoritesScreen() {
     Linking.openURL(`https://www.youtube.com/results?search_query=${query}`);
   };
 
+  const handleOpenSpotify = (title: string, artist?: string) => {
+    const query = encodeURIComponent(`${artist ? `${artist} ` : ''}${title}`);
+    Linking.openURL(`https://open.spotify.com/search/${query}`);
+  };
+
   return (
     <Screen title={t.favorites} subtitle={activeTab === 'stations' ? `${stations.length} ${t.saved}` : `${songs.length} ${t.saved}`}>
       {/* Top Segmented Controls */}
@@ -91,8 +96,17 @@ export default function FavoritesScreen() {
 
                 <View style={styles.songActions}>
                   <Pressable
+                    onPress={() => handleOpenSpotify(song.title, song.artist)}
+                    style={[styles.actionIconBtn, { backgroundColor: '#1DB954' }]}
+                    hitSlop={8}
+                    accessibilityLabel={t.searchSpotify}
+                  >
+                    <Ionicons name="musical-notes" size={16} color="#FFFFFF" />
+                  </Pressable>
+
+                  <Pressable
                     onPress={() => handleOpenYouTube(song.title, song.artist)}
-                    style={[styles.ytBtn, { backgroundColor: '#FF0000' }]}
+                    style={[styles.actionIconBtn, { backgroundColor: '#FF0000' }]}
                     hitSlop={8}
                     accessibilityLabel={t.searchYouTube}
                   >
@@ -146,7 +160,7 @@ const styles = StyleSheet.create({
   songTitle: { fontSize: 15, fontWeight: '700' },
   songArtist: { fontSize: 13, marginTop: 2 },
   songActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  ytBtn: {
+  actionIconBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,

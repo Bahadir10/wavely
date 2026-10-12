@@ -61,9 +61,24 @@ function normalizeStreamUrl(station: Station): string[] {
 
   // 6. Virgin Radio fix
   if (name.includes('virgin radio') && (station.countrycode === 'TR' || url.includes('VIRGIN_RADIO_SC'))) {
+    candidates.push('https://playerservices.streamtheworld.com/api/livestream-redirect/VIRGIN_RADIO_SC');
     candidates.push('http://29073.live.streamtheworld.com:3690/VIRGIN_RADIO_SC');
   } else if (name.includes('virgin radio') && (station.countrycode === 'GB' || name.includes('uk') || url.includes('virginradio.co.uk'))) {
     candidates.push('https://virgin.live.stream.broadcasting.news/stream');
+  }
+
+  // 7. Joy Türk & Metro FM & Kral Pop fix
+  if (name.includes('joy türk') || name.includes('joy turk')) {
+    candidates.push('https://playerservices.streamtheworld.com/api/livestream-redirect/JOY_TURK_SC');
+  }
+  if (name.includes('metro fm')) {
+    candidates.push('https://playerservices.streamtheworld.com/api/livestream-redirect/METRO_FM_SC');
+  }
+  if (name.includes('kral pop')) {
+    candidates.push('https://dygedge2.radyotvonline.net/kralpop/playlist.m3u8');
+  }
+  if (name.includes('power türk') || name.includes('power turk')) {
+    candidates.push('https://listen.powerapp.com.tr/powerturk/mpeg/icecast.audio');
   }
 
   // Primary API resolved URL
@@ -142,7 +157,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
         logger.info('PLAYER', `Playback started successfully with: ${streamUrl}`);
 
         // Immediate track fetch + periodic polling
-        fetchCurrentTrack(streamUrl).then((track) => {
+        fetchCurrentTrack(streamUrl, station.name).then((track) => {
           if (track) {
             set({ currentTrack: track });
             logger.info('METADATA', `Now playing track identified: ${track.title} - ${track.artist || ''}`);
@@ -151,7 +166,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
 
         metadataTimer = setInterval(async () => {
           if (get().status === 'playing') {
-            const track = await fetchCurrentTrack(streamUrl);
+            const track = await fetchCurrentTrack(streamUrl, get().current?.name || station.name);
             if (track) set({ currentTrack: track });
           }
         }, 12000);
@@ -199,7 +214,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     const { current } = get();
     if (!current) return;
     const candidates = normalizeStreamUrl(current);
-    const track = await fetchCurrentTrack(candidates[0]);
+    const track = await fetchCurrentTrack(candidates[0], current.name);
     if (track) set({ currentTrack: track });
   },
 
