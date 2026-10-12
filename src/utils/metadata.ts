@@ -147,7 +147,7 @@ export async function fetchCurrentTrack(
           icestats?: {
             source?:
               | { listenurl?: string; title?: string; yp_currently_playing?: string }
-              | Array<{ listenurl?: string; title?: string; yp_currently_playing?: string }>;
+              | { listenurl?: string; title?: string; yp_currently_playing?: string }[];
           };
         };
         const sources = json.icestats?.source;

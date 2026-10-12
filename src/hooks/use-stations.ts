@@ -13,7 +13,7 @@ export function useStations(params: StationQuery, enabled = true) {
         if (results.length > 0) return results;
         // Fallback to globally curated stations if query results empty
         return GLOBAL_FEATURED_STATIONS;
-      } catch (err) {
+      } catch {
         // Safe graceful degradation: return famous global stations so the user always has music
         return GLOBAL_FEATURED_STATIONS;
       }
