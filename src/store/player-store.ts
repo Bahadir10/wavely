@@ -23,27 +23,50 @@ let metadataTimer: ReturnType<typeof setInterval> | null = null;
 
 /**
  * Normalizes and resolves robust streaming URLs.
- * Catches known redirect-heavy or HTML landing streams.
+ * Detects known Turkish and global streams and prioritizes verified direct audio endpoints.
  */
 function normalizeStreamUrl(station: Station): string[] {
   const name = station.name.toLowerCase();
   const url = station.url_resolved || '';
   const candidates: string[] = [];
 
-  // Special known station stream direct URLs
+  // 1. Arabesk FM fix (Direct audio stream over port 8042)
+  if (name.includes('arabesk fm') || url.includes('arabeskfm.biz')) {
+    candidates.push('http://yayin.arabeskfm.biz:8042/;stream.mp3');
+    candidates.push('http://yayin.arabeskfm.biz:8042/');
+  }
+
+  // 2. Alem FM fix (HLS + Direct AAC)
   if (name.includes('alem fm') || name.includes('alemfm')) {
     candidates.push('https://turkmedya.radyotvonline.net/alemfmaac');
     candidates.push('http://turkmedya.radyotvonline.com/turkmedya/alemfm.stream/playlist.m3u8');
     candidates.push('https://edge1.radyotvonline.net/shoutcast/play/alemfm');
-  } else if (name.includes('virgin radio') && (station.countrycode === 'GB' || name.includes('uk'))) {
+  }
+
+  // 3. Kral FM fix
+  if (name.includes('kral fm') || url.includes('kralfm')) {
+    candidates.push('https://dygedge2.radyotvonline.net/kralfm/playlist.m3u8');
+    candidates.push('https://live.radyositesihazir.com/8032/stream');
+  }
+
+  // 4. Slow Türk fix
+  if (name.includes('slow türk') || name.includes('slow turk')) {
+    candidates.push('https://radyo.duhnet.tv/ak_dtvh_slowturk');
+  }
+
+  // 5. Süper FM fix
+  if (name.includes('süper fm') || name.includes('super fm')) {
+    candidates.push('https://playerservices.streamtheworld.com/api/livestream-redirect/SUPER_FM_SC');
+  }
+
+  // 6. Virgin Radio fix
+  if (name.includes('virgin radio') && (station.countrycode === 'TR' || url.includes('VIRGIN_RADIO_SC'))) {
+    candidates.push('http://29073.live.streamtheworld.com:3690/VIRGIN_RADIO_SC');
+  } else if (name.includes('virgin radio') && (station.countrycode === 'GB' || name.includes('uk') || url.includes('virginradio.co.uk'))) {
     candidates.push('https://virgin.live.stream.broadcasting.news/stream');
   }
 
-  // Follow redirect or use given URL
-  if (url.includes('radio.virginradio.co.uk/stream')) {
-    candidates.push('https://virgin.live.stream.broadcasting.news/stream');
-  }
-
+  // Primary API resolved URL
   candidates.push(url);
 
   // In Shoutcast servers without file extensions, appending /; ensures stream mode
@@ -55,7 +78,7 @@ function normalizeStreamUrl(station: Station): string[] {
     candidates.push(url.replace('http://', 'https://'));
   }
 
-  return Array.from(new Set(candidates));
+  return Array.from(new Set(candidates.filter(Boolean)));
 }
 
 async function getPlayer(): Promise<AudioPlayer> {
@@ -118,8 +141,12 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
         success = true;
         logger.info('PLAYER', `Playback started successfully with: ${streamUrl}`);
 
+        // Immediate track fetch + periodic polling
         fetchCurrentTrack(streamUrl).then((track) => {
-          if (track) set({ currentTrack: track });
+          if (track) {
+            set({ currentTrack: track });
+            logger.info('METADATA', `Now playing track identified: ${track.title} - ${track.artist || ''}`);
+          }
         });
 
         metadataTimer = setInterval(async () => {

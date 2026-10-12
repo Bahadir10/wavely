@@ -21,8 +21,14 @@ export default function PlayerScreen() {
   const isFavorite = useFavoritesStore((s) => s.stations.some((f) => f.stationuuid === current?.stationuuid));
   const toggleFavorite = useFavoritesStore((s) => s.toggle);
 
-  const { saveSong, removeSong, isSongSaved } = useSavedSongsStore();
-  const songIsLiked = currentTrack ? isSongSaved(currentTrack.title, currentTrack.artist) : false;
+  const songs = useSavedSongsStore((s) => s.songs);
+  const saveSong = useSavedSongsStore((s) => s.saveSong);
+  const removeSong = useSavedSongsStore((s) => s.removeSong);
+
+  // Directly derive reactive boolean from zustand songs array state
+  const songIsLiked = currentTrack
+    ? songs.some((s) => s.id === `${currentTrack.title}-${currentTrack.artist || ''}`.toLowerCase())
+    : false;
 
   useEffect(() => {
     if (!current && router.canGoBack()) router.back();
@@ -35,9 +41,9 @@ export default function PlayerScreen() {
 
   const handleToggleSongLike = () => {
     if (!currentTrack || !current) return;
-    Haptics.selectionAsync();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const songId = `${currentTrack.title}-${currentTrack.artist || ''}`.toLowerCase();
     if (songIsLiked) {
-      const songId = `${currentTrack.title}-${currentTrack.artist || ''}`.toLowerCase();
       removeSong(songId);
     } else {
       saveSong({
@@ -83,7 +89,7 @@ export default function PlayerScreen() {
             {current.name.trim()}
           </Text>
 
-          {/* Currently playing song/artist banner + LIKE SONG BUTTON */}
+          {/* Currently playing song/artist banner + REACTIVE LIKE SONG BUTTON */}
           {currentTrack ? (
             <View style={styles.songCard}>
               <Ionicons name="musical-notes" size={18} color="#FF6B6B" />
@@ -99,13 +105,13 @@ export default function PlayerScreen() {
               </View>
               <Pressable
                 onPress={handleToggleSongLike}
-                hitSlop={10}
+                hitSlop={12}
                 style={[styles.likeSongBtn, songIsLiked && styles.likeSongBtnActive]}
                 accessibilityLabel="Like song"
               >
                 <Ionicons
                   name={songIsLiked ? 'heart' : 'heart-outline'}
-                  size={18}
+                  size={20}
                   color={songIsLiked ? '#FF3B5C' : '#FFFFFF'}
                 />
               </Pressable>
@@ -194,23 +200,25 @@ const styles = StyleSheet.create({
   songCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: 'rgba(0,0,0,0.38)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    gap: 12,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: radius.lg,
     maxWidth: '95%',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   songTextContainer: { alignItems: 'center', flexShrink: 1 },
   songTitle: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
   songArtist: { color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '500' },
   likeSongBtn: {
-    padding: 6,
+    padding: 8,
     borderRadius: radius.pill,
     backgroundColor: 'rgba(255,255,255,0.15)',
   },
   likeSongBtnActive: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: '#FFFFFF',
   },
   meta: { color: 'rgba(255,255,255,0.75)', fontSize: 15, fontWeight: '500' },
   details: { color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
