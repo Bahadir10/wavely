@@ -8,7 +8,8 @@ import { StateView } from '@/components/state-view';
 import { StationRow } from '@/components/station-row';
 import { GENRES, capitalize } from '@/constants/catalog';
 import { useStations } from '@/hooks/use-stations';
-import { useSettingsStore, useI18n } from '@/store/settings-store';
+import { useFavoritesStore } from '@/store/favorites-store';
+import { useI18n, useSettingsStore } from '@/store/settings-store';
 import { spacing } from '@/theme/tokens';
 import { greeting } from '@/utils/format';
 
@@ -17,11 +18,28 @@ export default function HomeScreen() {
   const t = useI18n();
   const [genre, setGenre] = useState<string | null>(null);
 
+  const favorites = useFavoritesStore((s) => s.stations);
   const featured = useStations({ order: 'votes', limit: 10 });
   const popular = useStations({ countrycode: countryCode, tag: genre ?? undefined, limit: 25 });
 
   return (
     <Screen title="Wavely" subtitle={greeting()}>
+      {/* Top Carousel: Favorite Stations (Instant Access) */}
+      {favorites.length > 0 && (
+        <>
+          <SectionTitle>{t.yourFavorites}</SectionTitle>
+          <FlatList
+            horizontal
+            data={favorites}
+            keyExtractor={(s) => `fav-${s.stationuuid}`}
+            renderItem={({ item }) => <FeaturedCard station={item} />}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.carousel}
+            style={styles.bleed}
+          />
+        </>
+      )}
+
       <SectionTitle>{t.featured}</SectionTitle>
       {featured.isLoading ? (
         <StateView loading />

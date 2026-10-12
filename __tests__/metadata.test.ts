@@ -25,4 +25,10 @@ describe('metadata parseTrackTitle', () => {
     expect(res.artist).toBe('Duman & Sebnem Ferah');
     expect(res.title).toBe('En Guzel Gunum Gecem');
   });
+
+  it('strips <br> and HTML tags from raw titles', () => {
+    const res = parseTrackTitle('Muslum Gurses<br/>Nilufer');
+    expect(res.artist).toBe('Muslum Gurses');
+    expect(res.title).toBe('Nilufer');
+  });
 });

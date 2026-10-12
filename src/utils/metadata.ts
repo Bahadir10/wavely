@@ -9,12 +9,17 @@ export interface NowPlayingTrack {
 
 function decodeEntities(str: string): string {
   return str
+    .replace(/<br\s*\/?>/gi, ' - ')
+    .replace(/<[^>]*>/g, '')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#039;/g, "'")
-    .replace(/&apos;/g, "'");
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export function parseTrackTitle(raw: string): NowPlayingTrack {
