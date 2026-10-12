@@ -69,7 +69,7 @@ export default function FavoritesScreen() {
           {stations.length === 0 ? (
             <StateView icon="heart-outline" title={t.noFavoritesYet} message={t.tapHeartStation} />
           ) : (
-            stations.map((s) => <StationRow key={s.stationuuid} station={s} />)
+            stations.map((s) => <StationRow key={s.stationuuid} station={s} queue={stations} />)
           )}
         </View>
       )}

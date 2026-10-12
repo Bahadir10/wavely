@@ -10,12 +10,12 @@ import { StationArtwork, gradientFor } from './station-artwork';
 
 export const FEATURED_CARD_WIDTH = 260;
 
-export function FeaturedCard({ station }: { station: Station }) {
+export function FeaturedCard({ station, queue }: { station: Station; queue?: Station[] }) {
   const play = usePlayerStore((s) => s.play);
 
   return (
     <Pressable
-      onPress={() => play(station)}
+      onPress={() => play(station, queue)}
       style={({ pressed }) => [pressed && { transform: [{ scale: 0.97 }] }]}
       accessibilityLabel={`Play ${station.name}`}
     >

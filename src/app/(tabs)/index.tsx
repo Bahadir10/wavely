@@ -32,7 +32,7 @@ export default function HomeScreen() {
             horizontal
             data={favorites}
             keyExtractor={(s) => `fav-${s.stationuuid}`}
-            renderItem={({ item }) => <FeaturedCard station={item} />}
+            renderItem={({ item }) => <FeaturedCard station={item} queue={favorites} />}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.carousel}
             style={styles.bleed}
@@ -48,7 +48,7 @@ export default function HomeScreen() {
           horizontal
           data={featured.data}
           keyExtractor={(s) => s.stationuuid}
-          renderItem={({ item }) => <FeaturedCard station={item} />}
+          renderItem={({ item }) => <FeaturedCard station={item} queue={featured.data} />}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.carousel}
           style={styles.bleed}
@@ -78,7 +78,7 @@ export default function HomeScreen() {
       ) : (
         <View style={styles.list}>
           {popular.data?.map((s) => (
-            <StationRow key={s.stationuuid} station={s} />
+            <StationRow key={s.stationuuid} station={s} queue={popular.data} />
           ))}
         </View>
       )}

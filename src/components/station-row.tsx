@@ -10,7 +10,7 @@ import { radius, spacing } from '@/theme/tokens';
 import { formatTags } from '@/utils/format';
 import { StationArtwork } from './station-artwork';
 
-export function StationRow({ station }: { station: Station }) {
+export function StationRow({ station, queue }: { station: Station; queue?: Station[] }) {
   const { colors } = useTheme();
   const play = usePlayerStore((s) => s.play);
   const isCurrent = usePlayerStore((s) => s.current?.stationuuid === station.stationuuid);
@@ -19,7 +19,7 @@ export function StationRow({ station }: { station: Station }) {
 
   return (
     <Pressable
-      onPress={() => play(station)}
+      onPress={() => play(station, queue)}
       style={({ pressed }) => [
         styles.row,
         { backgroundColor: colors.surface, borderColor: isCurrent ? colors.primary : colors.border },

@@ -12,14 +12,20 @@ import type { Station } from '@/api/types';
 import { logger } from '@/utils/logger';
 import { fetchCurrentTrack, type NowPlayingTrack } from '@/utils/metadata';
 
+import { useFavoritesStore } from '@/store/favorites-store';
+
 export type PlaybackStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
 
 interface PlayerState {
   current: Station | null;
+  queue: Station[];
   status: PlaybackStatus;
   errorMessage: string | null;
   currentTrack: NowPlayingTrack | null;
-  play: (station: Station) => Promise<void>;
+  play: (station: Station, queue?: Station[]) => Promise<void>;
+  setQueue: (queue: Station[]) => void;
+  playNext: () => Promise<void>;
+  playPrevious: () => Promise<void>;
   togglePlayback: () => Promise<void>;
   stop: () => void;
   refreshTrack: () => Promise<void>;
@@ -187,11 +193,12 @@ async function getPlayer(): Promise<AudioPlayer> {
 
 export const usePlayerStore = create<PlayerState>()((set, get) => ({
   current: null,
+  queue: [],
   status: 'idle',
   errorMessage: null,
   currentTrack: null,
 
-  play: async (station) => {
+  play: async (station, queue) => {
     if (get().current?.stationuuid === station.stationuuid && get().status === 'playing') {
       return;
     }
@@ -201,12 +208,14 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
       metadataTimer = null;
     }
 
+    const resolvedQueue = queue ?? (get().queue.length > 0 ? get().queue : [station]);
+
     logger.info('PLAYER', `Attempting to play station: ${station.name}`, {
       url: station.url_resolved,
       uuid: station.stationuuid,
     });
 
-    set({ current: station, status: 'loading', errorMessage: null, currentTrack: null });
+    set({ current: station, queue: resolvedQueue, status: 'loading', errorMessage: null, currentTrack: null });
 
     const p = await getPlayer();
     const candidateUrls = normalizeStreamUrl(station);
@@ -356,6 +365,38 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
         } catch {}
       }
     }
+  },
+
+  setQueue: (queue) => set({ queue }),
+
+  playNext: async () => {
+    const { current, queue } = get();
+    let list = queue;
+    if (!list || list.length <= 1) {
+      const favs = useFavoritesStore.getState().stations;
+      if (favs.length > 1) {
+        list = favs;
+      }
+    }
+    if (!list || list.length <= 1) return;
+    const currentIndex = list.findIndex((s) => s.stationuuid === current?.stationuuid);
+    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % list.length : 0;
+    await get().play(list[nextIndex], list);
+  },
+
+  playPrevious: async () => {
+    const { current, queue } = get();
+    let list = queue;
+    if (!list || list.length <= 1) {
+      const favs = useFavoritesStore.getState().stations;
+      if (favs.length > 1) {
+        list = favs;
+      }
+    }
+    if (!list || list.length <= 1) return;
+    const currentIndex = list.findIndex((s) => s.stationuuid === current?.stationuuid);
+    const prevIndex = currentIndex > 0 ? currentIndex - 1 : list.length - 1;
+    await get().play(list[prevIndex], list);
   },
 
   stop: () => {

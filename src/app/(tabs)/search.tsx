@@ -88,7 +88,7 @@ export default function SearchScreen() {
         <FlatList
           data={data}
           keyExtractor={(s) => s.stationuuid}
-          renderItem={({ item }) => <StationRow station={item} />}
+          renderItem={({ item }) => <StationRow station={item} queue={data} />}
           ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
           ListEmptyComponent={<StateView title={t.noResults} message={t.tryDifferent} />}
           contentContainerStyle={styles.list}

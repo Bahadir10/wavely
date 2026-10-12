@@ -26,7 +26,8 @@ import { formatTags } from '@/utils/format';
 
 export default function PlayerScreen() {
   const t = useI18n();
-  const { current, status, currentTrack, play, togglePlayback, stop, refreshTrack } = usePlayerStore();
+  const { current, status, currentTrack, play, togglePlayback, stop, refreshTrack, playNext, playPrevious } =
+    usePlayerStore();
   const isFavorite = useFavoritesStore((s) => s.stations.some((f) => f.stationuuid === current?.stationuuid));
   const toggleFavorite = useFavoritesStore((s) => s.toggle);
 
@@ -248,7 +249,22 @@ export default function PlayerScreen() {
             hitSlop={12}
             accessibilityLabel={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
           >
-            <Ionicons name={isFavorite ? 'heart' : 'heart-outline'} size={32} color="#fff" />
+            <Ionicons
+              name={isFavorite ? 'heart' : 'heart-outline'}
+              size={28}
+              color={isFavorite ? '#FF3B5C' : '#fff'}
+            />
+          </Pressable>
+
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              playPrevious();
+            }}
+            hitSlop={12}
+            accessibilityLabel="Previous station"
+          >
+            <Ionicons name="play-skip-back" size={28} color="#fff" />
           </Pressable>
 
           <Pressable
@@ -266,8 +282,19 @@ export default function PlayerScreen() {
             )}
           </Pressable>
 
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              playNext();
+            }}
+            hitSlop={12}
+            accessibilityLabel="Next station"
+          >
+            <Ionicons name="play-skip-forward" size={28} color="#fff" />
+          </Pressable>
+
           <Pressable onPress={handleShareStation} hitSlop={12} accessibilityLabel="Share">
-            <Ionicons name="share-social-outline" size={28} color="rgba(255,255,255,0.8)" />
+            <Ionicons name="share-social-outline" size={26} color="rgba(255,255,255,0.85)" />
           </Pressable>
         </View>
       </SafeAreaView>
