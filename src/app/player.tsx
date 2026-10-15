@@ -26,7 +26,7 @@ import { formatTags } from '@/utils/format';
 
 export default function PlayerScreen() {
   const t = useI18n();
-  const { current, status, currentTrack, play, togglePlayback, stop, refreshTrack, playNext, playPrevious } =
+  const { current, status, currentTrack, play, togglePlayback, stop, refreshTrack, playNext, playPrevious, retryCurrent } =
     usePlayerStore();
   const isFavorite = useFavoritesStore((s) => s.stations.some((f) => f.stationuuid === current?.stationuuid));
   const toggleFavorite = useFavoritesStore((s) => s.toggle);
@@ -222,22 +222,38 @@ export default function PlayerScreen() {
           <Visualizer active={status === 'playing'} color="rgba(255,255,255,0.9)" bars={32} height={46} />
         </View>
 
-        {status === 'error' && (
+        {status === 'error' ? (
           <View style={styles.errorCard}>
             <Ionicons name="cloud-offline-outline" size={18} color="#FF6B6B" />
             <Text style={styles.error}>{t.streamDisconnected}</Text>
             <Pressable
               onPress={() => {
                 Haptics.selectionAsync();
-                play(current);
+                retryCurrent();
               }}
               style={styles.reconnectBtn}
               hitSlop={8}
-              accessibilityLabel={t.reconnect}
+              accessibilityLabel={t.retryStream}
+              testID="btn-retry-error"
             >
               <Text style={styles.reconnectBtnText}>{t.reconnect}</Text>
             </Pressable>
           </View>
+        ) : (
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              retryCurrent();
+              showToast(t.connecting);
+            }}
+            hitSlop={8}
+            style={styles.streamHintBtn}
+            accessibilityLabel={t.retryStream}
+            testID="btn-retry-hint"
+          >
+            <Ionicons name="refresh-outline" size={13} color="rgba(255,255,255,0.75)" />
+            <Text style={styles.streamHintText}>{t.noAudioHint}</Text>
+          </Pressable>
         )}
 
         <View style={styles.controls}>
@@ -435,6 +451,23 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   reconnectBtnText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
+  streamHintBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  streamHintText: {
+    color: 'rgba(255, 255, 255, 0.75)',
+    fontSize: 12,
+    fontWeight: '500',
+  },
   controls: {
     flexDirection: 'row',
     alignItems: 'center',

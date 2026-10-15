@@ -18,6 +18,7 @@ export function MiniPlayer() {
   const status = usePlayerStore((s) => s.status);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const toggle = usePlayerStore((s) => s.togglePlayback);
+  const retryCurrent = usePlayerStore((s) => s.retryCurrent);
 
   if (!current) return null;
 
@@ -55,14 +56,16 @@ export function MiniPlayer() {
           </View>
         </View>
         <Pressable
-          onPress={toggle}
+          onPress={status === 'error' ? retryCurrent : toggle}
           hitSlop={10}
-          style={[styles.button, { backgroundColor: colors.primary }]}
-          accessibilityLabel={status === 'playing' ? 'Pause' : 'Play'}
+          style={[styles.button, { backgroundColor: status === 'error' ? '#EF4444' : colors.primary }]}
+          accessibilityLabel={status === 'error' ? t.retryStream : status === 'playing' ? 'Pause' : 'Play'}
           testID="mini-player-toggle"
         >
           {status === 'loading' ? (
             <ActivityIndicator color="#fff" size="small" />
+          ) : status === 'error' ? (
+            <Ionicons name="refresh" size={20} color="#fff" />
           ) : (
             <Ionicons name={status === 'playing' ? 'pause' : 'play'} size={20} color="#fff" />
           )}

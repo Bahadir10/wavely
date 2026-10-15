@@ -13,6 +13,7 @@ import { logger } from '@/utils/logger';
 import { fetchCurrentTrack, type NowPlayingTrack } from '@/utils/metadata';
 
 import { useFavoritesStore } from '@/store/favorites-store';
+import { useStatsStore } from '@/store/stats-store';
 
 export type PlaybackStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
 
@@ -22,10 +23,12 @@ interface PlayerState {
   status: PlaybackStatus;
   errorMessage: string | null;
   currentTrack: NowPlayingTrack | null;
+  currentCandidateUrl: string | null;
   play: (station: Station, queue?: Station[]) => Promise<void>;
   setQueue: (queue: Station[]) => void;
   playNext: () => Promise<void>;
   playPrevious: () => Promise<void>;
+  retryCurrent: () => Promise<void>;
   togglePlayback: () => Promise<void>;
   stop: () => void;
   refreshTrack: () => Promise<void>;
@@ -33,6 +36,10 @@ interface PlayerState {
 
 let player: AudioPlayer | null = null;
 let metadataTimer: ReturnType<typeof setInterval> | null = null;
+let statsTimer: ReturnType<typeof setInterval> | null = null;
+let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
+let activeCandidateIndex = 0;
+let currentCandidateUrls: string[] = [];
 
 // Lock screen service requires standalone build on Android (not present in Expo Go's prebuilt manifest)
 const canUseLockScreen =
@@ -97,6 +104,10 @@ function normalizeStreamUrl(station: Station): string[] {
   if (name.includes('power türk') || name.includes('power turk')) {
     candidates.push('https://listen.powerapp.com.tr/powerturk/mpeg/icecast.audio');
   }
+  if (name.includes('fenomen')) {
+    candidates.push('https://live.radyofenomen.com/fenomen/256/chunks.m3u8');
+    candidates.push('https://live.radyofenomen.com/fenomen/128/icecast.audio');
+  }
 
   // Primary API resolved URL
   candidates.push(url);
@@ -146,27 +157,19 @@ async function getPlayer(): Promise<AudioPlayer> {
     player.addListener('playbackStatusUpdate', (status) => {
       const state = usePlayerStore.getState();
 
-      // Ignore updates while initial connecting or buffering
-      if (
-        status.isBuffering ||
-        status.playbackState === 'buffering' ||
-        status.playbackState === 'loading'
-      ) {
-        return;
-      }
-
-      if (status.playbackState === 'failed' || status.playbackState === 'error') {
-        logger.warn('PLAYER', 'Stream playback error or disconnect detected', status);
-        usePlayerStore.setState({
-          status: 'error',
-          errorMessage: 'Stream connection lost',
-        });
+      if (status.playbackState === 'playing' || status.playing) {
+        clearWatchdog();
+        if (state.status !== 'playing') {
+          logger.info('PLAYER', 'Stream playback confirmed active');
+          usePlayerStore.setState({ status: 'playing', errorMessage: null });
+          startStatsTracking();
+        }
+      } else if (status.playbackState === 'failed' || status.playbackState === 'error') {
+        logger.warn('PLAYER', 'Stream playback error detected on candidate', status);
+        switchCandidate(activeCandidateIndex + 1);
       } else if (status.didJustFinish && state.status === 'playing') {
         logger.warn('PLAYER', 'Stream finished or disconnected unexpectedly');
-        usePlayerStore.setState({
-          status: 'paused',
-          errorMessage: 'Stream connection lost',
-        });
+        switchCandidate(activeCandidateIndex + 1);
       } else if (
         status.isLoaded &&
         !status.playing &&
@@ -175,11 +178,13 @@ async function getPlayer(): Promise<AudioPlayer> {
       ) {
         // Genuinely paused externally (headphones unplugged, phone call, or lock screen button)
         logger.info('PLAYER', 'Playback paused externally via lock screen or system');
+        stopStatsTracking();
         usePlayerStore.setState({ status: 'paused' });
       } else if (status.playing && state.status === 'paused') {
         // Resumed externally
         logger.info('PLAYER', 'Playback resumed externally via lock screen');
         usePlayerStore.setState({ status: 'playing', errorMessage: null });
+        startStatsTracking();
       }
     });
 
@@ -191,121 +196,193 @@ async function getPlayer(): Promise<AudioPlayer> {
   }
 }
 
+function startStatsTracking() {
+  if (statsTimer) return;
+  statsTimer = setInterval(() => {
+    const state = usePlayerStore.getState();
+    if (state.status === 'playing' && state.current) {
+      useStatsStore.getState().recordListeningTime(state.current, 1);
+    }
+  }, 1000);
+}
+
+function stopStatsTracking() {
+  if (statsTimer) {
+    clearInterval(statsTimer);
+    statsTimer = null;
+  }
+}
+
+function clearWatchdog() {
+  if (watchdogTimer) {
+    clearTimeout(watchdogTimer);
+    watchdogTimer = null;
+  }
+}
+
+async function switchCandidate(index: number) {
+  clearWatchdog();
+  const state = usePlayerStore.getState();
+  const station = state.current;
+  if (!station) return;
+
+  if (index >= currentCandidateUrls.length) {
+    logger.warn('PLAYER', 'All stream candidates exhausted or timed out');
+    stopStatsTracking();
+    usePlayerStore.setState({
+      status: 'error',
+      errorMessage: 'Ses akışına bağlanılamadı. Yeniden denemek için dokunun.',
+    });
+    return;
+  }
+
+  activeCandidateIndex = index;
+  const streamUrl = currentCandidateUrls[index];
+  logger.info('PLAYER', `Attempting stream candidate (${index + 1}/${currentCandidateUrls.length}): ${streamUrl}`);
+  usePlayerStore.setState({ status: 'loading', currentCandidateUrl: streamUrl });
+
+  try {
+    const p = await getPlayer();
+    p.replace({ uri: streamUrl });
+    p.play();
+
+    // 6.5s Watchdog: if stream doesn't output audio within 6.5s, failover to next candidate automatically
+    watchdogTimer = setTimeout(() => {
+      const current = usePlayerStore.getState();
+      if (current.status === 'loading') {
+        logger.warn('PLAYER', `Candidate timed out without audio (>6.5s): ${streamUrl}, trying next candidate...`);
+        switchCandidate(activeCandidateIndex + 1);
+      }
+    }, 6500);
+
+    // Activate Lock Screen Media Controls if supported
+    if (canUseLockScreen) {
+      try {
+        p.setActiveForLockScreen(
+          true,
+          {
+            title: station.name,
+            artist: 'Wavely Live Radio',
+            albumTitle: station.name,
+            artworkUrl: station.favicon,
+          },
+          {
+            isLiveStream: true,
+            showSeekForward: false,
+            showSeekBackward: false,
+          }
+        );
+      } catch (lockErr) {
+        logger.debug('PLAYER', 'Lock screen setup skipped', lockErr);
+      }
+    }
+
+    // Immediate track fetch + periodic polling
+    fetchCurrentTrack(streamUrl, station.name).then((track) => {
+      if (track) {
+        usePlayerStore.setState({ currentTrack: track });
+        logger.info('METADATA', `Now playing track identified: ${track.title} - ${track.artist || ''}`);
+        if (canUseLockScreen) {
+          try {
+            p.updateLockScreenMetadata({
+              title: track.title,
+              artist: track.artist || station.name,
+              albumTitle: station.name,
+              artworkUrl: track.artwork || station.favicon,
+            });
+          } catch {}
+        }
+      }
+    });
+
+    if (metadataTimer) {
+      clearInterval(metadataTimer);
+    }
+    metadataTimer = setInterval(async () => {
+      if (usePlayerStore.getState().status === 'playing') {
+        const track = await fetchCurrentTrack(streamUrl, usePlayerStore.getState().current?.name || station.name);
+        if (track) {
+          usePlayerStore.setState({ currentTrack: track });
+          if (canUseLockScreen) {
+            try {
+              p.updateLockScreenMetadata({
+                title: track.title,
+                artist: track.artist || station.name,
+                albumTitle: station.name,
+                artworkUrl: track.artwork || station.favicon,
+              });
+            } catch {}
+          }
+        }
+      }
+    }, 15000);
+  } catch (err) {
+    logger.warn('PLAYER', `Candidate threw direct error: ${streamUrl}`, err);
+    switchCandidate(activeCandidateIndex + 1);
+  }
+}
+
 export const usePlayerStore = create<PlayerState>()((set, get) => ({
   current: null,
   queue: [],
   status: 'idle',
   errorMessage: null,
   currentTrack: null,
+  currentCandidateUrl: null,
 
   play: async (station, queue) => {
     if (get().current?.stationuuid === station.stationuuid && get().status === 'playing') {
       return;
     }
 
+    clearWatchdog();
+    stopStatsTracking();
     if (metadataTimer) {
       clearInterval(metadataTimer);
       metadataTimer = null;
     }
 
     const resolvedQueue = queue ?? (get().queue.length > 0 ? get().queue : [station]);
+    currentCandidateUrls = normalizeStreamUrl(station);
+    activeCandidateIndex = 0;
 
     logger.info('PLAYER', `Attempting to play station: ${station.name}`, {
       url: station.url_resolved,
       uuid: station.stationuuid,
+      candidatesCount: currentCandidateUrls.length,
     });
 
-    set({ current: station, queue: resolvedQueue, status: 'loading', errorMessage: null, currentTrack: null });
+    set({
+      current: station,
+      queue: resolvedQueue,
+      status: 'loading',
+      errorMessage: null,
+      currentTrack: null,
+      currentCandidateUrl: currentCandidateUrls[0] || null,
+    });
 
-    const p = await getPlayer();
-    const candidateUrls = normalizeStreamUrl(station);
-    let success = false;
-    let lastError: unknown = null;
+    await switchCandidate(0);
+  },
 
-    for (const streamUrl of candidateUrls) {
-      try {
-        logger.info('PLAYER', `Trying stream candidate: ${streamUrl}`);
-        p.replace({ uri: streamUrl });
-        p.play();
-        set({ status: 'playing', errorMessage: null });
-        success = true;
-        logger.info('PLAYER', `Playback started successfully with: ${streamUrl}`);
-
-        // Activate Lock Screen Media Controls if supported
-        if (canUseLockScreen) {
-          try {
-            p.setActiveForLockScreen(
-              true,
-              {
-                title: station.name,
-                artist: 'Wavely Live Radio',
-                albumTitle: station.name,
-                artworkUrl: station.favicon,
-              },
-              {
-                isLiveStream: true,
-                showSeekForward: false,
-                showSeekBackward: false,
-              }
-            );
-          } catch (lockErr) {
-            logger.debug('PLAYER', 'Lock screen setup skipped', lockErr);
-          }
-        }
-
-        // Immediate track fetch + periodic polling
-        fetchCurrentTrack(streamUrl, station.name).then((track) => {
-          if (track) {
-            set({ currentTrack: track });
-            logger.info('METADATA', `Now playing track identified: ${track.title} - ${track.artist || ''}`);
-            if (canUseLockScreen) {
-              try {
-                p.updateLockScreenMetadata({
-                  title: track.title,
-                  artist: track.artist || station.name,
-                  albumTitle: station.name,
-                  artworkUrl: track.artwork || station.favicon,
-                });
-              } catch {}
-            }
-          }
-        });
-
-        metadataTimer = setInterval(async () => {
-          if (get().status === 'playing') {
-            const track = await fetchCurrentTrack(streamUrl, get().current?.name || station.name);
-            if (track) {
-              set({ currentTrack: track });
-              if (canUseLockScreen) {
-                try {
-                  p.updateLockScreenMetadata({
-                    title: track.title,
-                    artist: track.artist || station.name,
-                    albumTitle: station.name,
-                    artworkUrl: track.artwork || station.favicon,
-                  });
-                } catch {}
-              }
-            }
-          }
-        }, 12000);
-
-        break;
-      } catch (err) {
-        lastError = err;
-        logger.warn('PLAYER', `Candidate ${streamUrl} failed, trying fallback`, err);
+  retryCurrent: async () => {
+    const { current, queue } = get();
+    if (!current) return;
+    logger.info('PLAYER', `Retrying playback for station: ${current.name}`);
+    clearWatchdog();
+    stopStatsTracking();
+    try {
+      if (player) {
+        player.pause();
       }
+    } catch {}
+    if (currentCandidateUrls.length > 1) {
+      activeCandidateIndex = (activeCandidateIndex + 1) % currentCandidateUrls.length;
     }
-
-    if (!success) {
-      const msg = lastError instanceof Error ? lastError.message : 'Stream could not be played';
-      logger.error('PLAYER', `All stream candidates failed for: ${station.name}`, lastError);
-      set({ status: 'error', errorMessage: msg });
-    }
+    await switchCandidate(activeCandidateIndex);
   },
 
   togglePlayback: async () => {
-    const { status, current, currentTrack } = get();
+    const { status, current } = get();
     if (!current) return;
 
     logger.info('PLAYER', `Toggle playback from state: ${status}`);
@@ -314,32 +391,21 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
       const p = await getPlayer();
       if (status === 'playing') {
         p.pause();
+        stopStatsTracking();
+        clearWatchdog();
         set({ status: 'paused' });
         logger.info('PLAYER', 'Playback paused');
       } else {
-        const candidateUrls = normalizeStreamUrl(current);
-        p.replace({ uri: candidateUrls[0] });
+        set({ status: 'loading', errorMessage: null });
         p.play();
-        if (canUseLockScreen) {
-          try {
-            p.setActiveForLockScreen(
-              true,
-              {
-                title: currentTrack?.title || current.name,
-                artist: currentTrack?.artist || current.name,
-                albumTitle: current.name,
-                artworkUrl: currentTrack?.artwork || current.favicon,
-              },
-              {
-                isLiveStream: true,
-                showSeekForward: false,
-                showSeekBackward: false,
-              }
-            );
-          } catch {}
-        }
-        set({ status: 'playing', errorMessage: null });
-        logger.info('PLAYER', 'Playback resumed');
+        watchdogTimer = setTimeout(() => {
+          const s = usePlayerStore.getState();
+          if (s.status === 'loading') {
+            logger.warn('PLAYER', 'Resume watchdog: failed to resume, retrying candidate');
+            switchCandidate(activeCandidateIndex);
+          }
+        }, 6500);
+        logger.info('PLAYER', 'Playback resume requested');
       }
     } catch (err) {
       logger.error('PLAYER', 'Toggle playback error', err);
@@ -401,6 +467,8 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
 
   stop: () => {
     logger.info('PLAYER', 'Playback stopped');
+    clearWatchdog();
+    stopStatsTracking();
     if (metadataTimer) {
       clearInterval(metadataTimer);
       metadataTimer = null;
@@ -416,6 +484,6 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     } catch (err) {
       logger.warn('PLAYER', 'Error clearing player on stop', err);
     }
-    set({ current: null, status: 'idle', errorMessage: null, currentTrack: null });
+    set({ current: null, status: 'idle', errorMessage: null, currentTrack: null, currentCandidateUrl: null });
   },
 }));

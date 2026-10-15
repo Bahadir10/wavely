@@ -51,6 +51,11 @@ export const translations = {
     light: 'Light',
     dark: 'Dark',
     system: 'System',
+    recommendedForYou: 'Recommended For You',
+    musicPersona: 'Your Music Persona',
+    listeningStats: 'Listening Stats',
+    retryStream: 'Reconnect Stream',
+    noAudioHint: 'No sound? Tap to reconnect',
   },
   tr: {
     home: 'Ana Sayfa',
@@ -102,5 +107,10 @@ export const translations = {
     light: 'Açık',
     dark: 'Koyu',
     system: 'Sistem',
+    recommendedForYou: 'Sizin İçin Önerilenler',
+    musicPersona: 'Müzik Kimliğin',
+    listeningStats: 'Dinleme İstatistikleri',
+    retryStream: 'Yeniden Bağlan',
+    noAudioHint: 'Ses gelmedi mi? Yenilemek için dokunun',
   },
 };

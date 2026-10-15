@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-// Clean & sanitize metadata tags (same logic as in src/utils/metadata.ts)
+// Clean & sanitize metadata tags
 function decodeEntities(str) {
   return str
     .replace(/<br\s*\/?>/gi, ' - ')
@@ -35,6 +35,7 @@ function parseTrackTitle(raw) {
 
 // 1. Audio stream probe: tests HTTP response, content-type and first byte chunks
 async function probeAudioStream(url) {
+  if (!url || typeof url !== 'string') return { alive: false, error: 'Geçersiz URL' };
   const startTime = Date.now();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 6000);
@@ -66,24 +67,21 @@ async function probeAudioStream(url) {
       return {
         alive: false,
         statusCode: res.status,
-        error: `HTTP ${res.status} ${res.statusText}`,
+        error: `HTTP ${res.status}`,
         latency,
         contentType,
-        headers: {},
       };
     }
 
-    // Try reading the first chunk to ensure real stream data flows
     let bytesRead = 0;
     let rawIcyTitle = null;
 
     if (res.body) {
       const reader = res.body.getReader();
       try {
-        const { value, done } = await reader.read();
+        const { value } = await reader.read();
         if (value) {
           bytesRead = value.length;
-          // Check for ICY metadata in chunk if icy-metaint is present
           if (icyMetaInt) {
             const metaInt = parseInt(icyMetaInt, 10);
             if (value.length > metaInt) {
@@ -101,9 +99,7 @@ async function probeAudioStream(url) {
           }
         }
         await reader.cancel();
-      } catch (readErr) {
-        // stream cancel is normal
-      }
+      } catch {}
     }
 
     return {
@@ -117,24 +113,22 @@ async function probeAudioStream(url) {
     };
   } catch (err) {
     clearTimeout(timeoutId);
-    const latency = Date.now() - startTime;
     return {
       alive: false,
       statusCode: null,
-      error: err.name === 'AbortError' ? 'Zaman Aşımı (Timeout > 6s)' : err.message,
-      latency,
-      contentType: null,
+      error: err.name === 'AbortError' ? 'Zaman Aşımı (>6s)' : err.message,
+      latency: Date.now() - startTime,
     };
   }
 }
 
-// 2. Metadata probe: attempts Icecast / Shoutcast / Triton lookup
+// 2. Metadata probe: Icecast / Shoutcast / Triton lookup
 async function probeMetadata(streamUrl, stationName) {
-  const parsed = new URL(streamUrl);
-  const origin = `${parsed.protocol}//${parsed.host}`;
-
-  // Triton Digital Check
   try {
+    const parsed = new URL(streamUrl);
+    const origin = `${parsed.protocol}//${parsed.host}`;
+
+    // Triton Check
     let tritonMount = null;
     const lower = (stationName + ' ' + streamUrl).toLowerCase();
     if (lower.includes('super fm') || lower.includes('super_fm')) tritonMount = 'SUPER_FM';
@@ -154,10 +148,8 @@ async function probeMetadata(streamUrl, stationName) {
         }
       }
     }
-  } catch {}
 
-  // Icecast status-json.xsl Check
-  try {
+    // Icecast status-json.xsl Check
     const icecastUrl = `${origin}/status-json.xsl`;
     const res = await fetch(icecastUrl, {
       headers: { Accept: 'application/json' },
@@ -175,34 +167,35 @@ async function probeMetadata(streamUrl, stationName) {
     }
   } catch {}
 
-  // Shoutcast 7.html Check
-  try {
-    const shoutcastUrl = `${origin}/7.html`;
-    const res = await fetch(shoutcastUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      signal: AbortSignal.timeout(3000),
-    });
-    if (res.ok) {
-      const html = await res.text();
-      const parts = html.split(',');
-      if (parts.length >= 7 && parts[6].trim().length > 1) {
-        return parts.slice(6).join(',').replace(/<\/?[^>]+(>|$)/g, '').trim();
-      }
-    }
-  } catch {}
-
   return null;
 }
 
-// 3. Main Audit Runner
-async function runAudit() {
-  console.log('\n============================================================');
-  console.log('📻  WAVELY CANLI RADYO & METADATA SAĞLIK DENETİMİ (AUDIT)');
-  console.log('============================================================');
-  console.log('📡 İstasyonlar taranıyor: Ses akışı, çalan şarkı ve <br> analizi...\n');
+// 3. Auto-Healing: Find working fallback URL from Radio Browser API
+async function searchAlternativeStreams(stationName) {
+  try {
+    const cleanName = stationName.replace(/fm|radyo|türk|turk/gi, '').trim();
+    const query = encodeURIComponent(cleanName.length > 2 ? cleanName : stationName);
+    const res = await fetch(`https://all.api.radio-browser.info/json/stations/byname/${query}?limit=6`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return [];
+    const list = await res.json();
+    return list.map((s) => ({ name: s.name, url: s.url_resolved })).filter((s) => s.url);
+  } catch {
+    return [];
+  }
+}
 
-  // List of prominent Turkish stations to audit
-  const stationsToTest = [
+// 4. Main Audit Runner
+async function runAudit() {
+  const isFull = process.argv.includes('--full') || true;
+  console.log('\n========================================================================================');
+  console.log('🚀  WAVELY OTONOM RADYO & METADATA SAĞLIK DENETÇİSİ (SELF-HEALING AUDITOR)');
+  console.log('========================================================================================');
+  console.log('📡 Kapsamlı tarama ve otomatik onarım başlatılıyor...\n');
+
+  // Load curated stations + fetch top Turkish stations from Radio Browser
+  const curatedStations = [
     { name: 'DAMAR TÜRK FM', url: 'https://live.radyositesihazir.com:10997/' },
     { name: 'Arabesk FM', url: 'http://yayin.arabeskfm.biz:8042/;stream.mp3' },
     { name: 'Alem FM', url: 'https://turkmedya.radyotvonline.net/alemfmaac' },
@@ -213,24 +206,68 @@ async function runAudit() {
     { name: 'Joy Türk', url: 'https://playerservices.streamtheworld.com/api/livestream-redirect/JOY_TURK_SC' },
     { name: 'Metro FM', url: 'https://playerservices.streamtheworld.com/api/livestream-redirect/METRO_FM_SC' },
     { name: 'Kral Pop', url: 'https://dygedge2.radyotvonline.net/kralpop/playlist.m3u8' },
-    { name: 'Radyo Fenomen', url: 'https://fenomenturk.listenfenomen.com/fenomenturk/128/icecast.audio' },
     { name: 'Power FM', url: 'https://listen.powerapp.com.tr/powerfm/mpeg/icecast.audio' },
-    { name: 'Bozuk Test İstasyonu (Örnek 404)', url: 'https://stream.invalid-radio-domain-test.xyz:8000/live' }
+    { name: 'Power Türk', url: 'https://listen.powerapp.com.tr/powerturk/mpeg/icecast.audio' },
+    { name: 'Radyo Fenomen', url: 'https://live.radyofenomen.com/fenomen/256/chunks.m3u8' },
+    { name: 'Eski Fenomen URL (Ölü Link Testi)', url: 'https://fenomenturk.listenfenomen.com/fenomenturk/128/icecast.audio' },
   ];
+
+  let stationsToTest = [...curatedStations];
+
+  if (isFull) {
+    try {
+      console.log('🌐 Radio-Browser API üzerinden en popüler Türk radyoları alınıyor...');
+      const apiRes = await fetch(
+        'https://all.api.radio-browser.info/json/stations/bycountrycodeexact/TR?limit=15&order=votes&reverse=true',
+        { signal: AbortSignal.timeout(6000) }
+      );
+      if (apiRes.ok) {
+        const apiStations = await apiRes.json();
+        for (const s of apiStations) {
+          if (!stationsToTest.some((c) => c.name.toLowerCase() === s.name.toLowerCase())) {
+            stationsToTest.push({ name: s.name.trim(), url: s.url_resolved });
+          }
+        }
+      }
+    } catch {
+      console.log('⚠️ Radio-Browser API çevrimdışı, yerel katalog taranıyor...');
+    }
+  }
+
+  console.log(`🔍 Toplam ${stationsToTest.length} istasyon taranacak...\n`);
 
   const results = [];
   let aliveCount = 0;
   let deadCount = 0;
+  let healedCount = 0;
   let hasTrackCount = 0;
   let hadBrTagsCount = 0;
 
   for (const station of stationsToTest) {
-    process.stdout.write(`⏳ Denetleniyor: ${station.name.padEnd(25)} ... `);
-    const audioRes = await probeAudioStream(station.url);
+    process.stdout.write(`⏳ Denetleniyor: ${station.name.slice(0, 24).padEnd(25)} ... `);
+    let audioRes = await probeAudioStream(station.url);
+    let healedUrl = null;
+
+    // ACTION: If dead, trigger Auto-Healing!
+    if (!audioRes.alive) {
+      process.stdout.write(`🔴 ÖLÜ -> 🔧 Yedek aranıyor... `);
+      const candidates = await searchAlternativeStreams(station.name);
+      for (const cand of candidates) {
+        if (cand.url !== station.url) {
+          const testCand = await probeAudioStream(cand.url);
+          if (testCand.alive) {
+            audioRes = testCand;
+            healedUrl = cand.url;
+            healedCount++;
+            break;
+          }
+        }
+      }
+    }
 
     let rawTrack = audioRes.rawIcyTitle || null;
-    if (!rawTrack) {
-      rawTrack = await probeMetadata(station.url, station.name);
+    if (!rawTrack && audioRes.alive) {
+      rawTrack = await probeMetadata(healedUrl || station.url, station.name);
     }
 
     let parsedTrack = null;
@@ -244,10 +281,12 @@ async function runAudit() {
 
       parsedTrack = parseTrackTitle(rawTrack);
       const remainingTags = /<[^>]*>/i.test(parsedTrack.raw);
-      cleanStatus = remainingTags ? '❌ Bozuk HTML Kaldı' : hadBrTags ? '🧹 <br> Temizlendi' : '✨ Temiz';
+      cleanStatus = remainingTags ? '❌ Bozuk HTML' : hadBrTags ? '🧹 <br> Temizlendi' : '✨ Temiz';
     }
 
-    if (audioRes.alive) {
+    if (healedUrl) {
+      console.log(`🟢 ONARILDI (${audioRes.latency}ms) [Yeni URL]`);
+    } else if (audioRes.alive) {
       aliveCount++;
       console.log(`🟢 CANLI (${audioRes.latency}ms)`);
     } else {
@@ -257,7 +296,8 @@ async function runAudit() {
 
     results.push({
       station: station.name,
-      url: station.url,
+      originalUrl: station.url,
+      healedUrl,
       alive: audioRes.alive,
       latencyMs: audioRes.latency,
       statusCode: audioRes.statusCode,
@@ -271,33 +311,39 @@ async function runAudit() {
   }
 
   // Print Formatted Report Table
-  console.log('\n========================================================================================');
-  console.log('📋  DENETİM SONUÇLARI RAPORU');
-  console.log('========================================================================================');
+  console.log('\n========================================================================================================');
+  console.log('📋  DENETİM VE OTONOM ONARIM SONUÇ RAPORU');
+  console.log('========================================================================================================');
   console.log(
-    'İstasyon'.padEnd(20) +
-    ' | Ses Durumu'.padEnd(16) +
+    'İstasyon'.padEnd(22) +
+    ' | Ses Durumu'.padEnd(18) +
     ' | Çalan Şarkı'.padEnd(35) +
     ' | HTML / <br> Durumu'
   );
-  console.log('-'.repeat(90));
+  console.log('-'.repeat(104));
 
   for (const r of results) {
-    const audioLabel = r.alive ? `🟢 CANLI (${r.latencyMs}ms)` : `🔴 ÖLÜ (${r.error?.slice(0, 10)})`;
+    const audioLabel = r.healedUrl
+      ? `🟢 ONARILDI (${r.latencyMs}ms)`
+      : r.alive
+      ? `🟢 CANLI (${r.latencyMs}ms)`
+      : `🔴 ÖLÜ (${(r.error || '').slice(0, 10)})`;
+
     const trackLabel = r.cleanedTrack ? r.cleanedTrack.slice(0, 32) : '⚠️ (Metadata Yok)';
     console.log(
-      r.station.slice(0, 18).padEnd(20) +
-      ' | ' + audioLabel.padEnd(14) +
+      r.station.slice(0, 20).padEnd(22) +
+      ' | ' + audioLabel.padEnd(16) +
       ' | ' + trackLabel.padEnd(33) +
       ' | ' + r.cleanStatus
     );
   }
 
-  console.log('-'.repeat(90));
-  console.log(`\n📊 GENEL ÖZET:`);
+  console.log('-'.repeat(104));
+  console.log(`\n📊 GENEL ÖZET & AKSİYON RAPORU:`);
   console.log(`  • Toplam Denetlenen: ${stationsToTest.length} İstasyon`);
   console.log(`  • 🟢 Canlı Ses Akışı:  ${aliveCount} adet`);
-  console.log(`  • 🔴 Ölü / Çevrimdışı: ${deadCount} adet (Örn. 404 / Zaman Aşımı yakalandı)`);
+  console.log(`  • 🔧 Otonom Onarılan:  ${healedCount} adet (Ölü çıkan istasyona canlı alternatif otomatik bulundu!)`);
+  console.log(`  • 🔴 Ölü / Çevrimdışı: ${deadCount} adet (Kurtarılamayan)`);
   console.log(`  • 🎵 Çalan Şarkı Aktif: ${hasTrackCount} adet`);
   console.log(`  • 🧹 <br> / Entity İçeren: ${hadBrTagsCount} adet (Parser tarafından otomatik temizlendi)\n`);
 
@@ -306,7 +352,7 @@ async function runAudit() {
   if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
   const reportPath = path.join(reportsDir, 'stream-audit-latest.json');
   fs.writeFileSync(reportPath, JSON.stringify(results, null, 2), 'utf-8');
-  console.log(`💾 Detaylı JSON raporu kaydedildi: reports/stream-audit-latest.json\n`);
+  console.log(`💾 Detaylı rapor kaydedildi: reports/stream-audit-latest.json\n`);
 }
 
 runAudit();
