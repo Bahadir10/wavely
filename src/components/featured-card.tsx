@@ -10,7 +10,15 @@ import { StationArtwork, gradientFor } from './station-artwork';
 
 export const FEATURED_CARD_WIDTH = 260;
 
-export function FeaturedCard({ station, queue }: { station: Station; queue?: Station[] }) {
+export function FeaturedCard({
+  station,
+  queue,
+  badgeText,
+}: {
+  station: Station;
+  queue?: Station[];
+  badgeText?: string;
+}) {
   const play = usePlayerStore((s) => s.play);
 
   return (
@@ -27,9 +35,18 @@ export function FeaturedCard({ station, queue }: { station: Station; queue?: Sta
       >
         <View style={styles.top}>
           <StationArtwork station={station} size={56} />
-          <View style={styles.live}>
-            <View style={styles.dot} />
-            <Text style={styles.liveText}>LIVE</Text>
+          <View style={styles.badgeRow}>
+            {badgeText ? (
+              <View style={styles.reasonBadge}>
+                <Text numberOfLines={1} style={styles.reasonText}>
+                  {badgeText}
+                </Text>
+              </View>
+            ) : null}
+            <View style={styles.live}>
+              <View style={styles.dot} />
+              <Text style={styles.liveText}>LIVE</Text>
+            </View>
           </View>
         </View>
         <View>
@@ -57,6 +74,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1, justifyContent: 'flex-end' },
+  reasonBadge: {
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+    maxWidth: 140,
+  },
+  reasonText: { color: '#fff', fontSize: 10, fontWeight: '800' },
   live: {
     flexDirection: 'row',
     alignItems: 'center',

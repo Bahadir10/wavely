@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FlatList, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Chip } from '@/components/chip';
@@ -9,7 +9,9 @@ import { StateView } from '@/components/state-view';
 import { StationRow } from '@/components/station-row';
 import { GENRES, capitalize } from '@/constants/catalog';
 import { useStations } from '@/hooks/use-stations';
+import { rankRecommendedStations } from '@/services/recommendation-engine';
 import { useFavoritesStore } from '@/store/favorites-store';
+import { useSavedSongsStore } from '@/store/saved-songs-store';
 import { useStatsStore } from '@/store/stats-store';
 import { useI18n, useSettingsStore } from '@/store/settings-store';
 import { spacing } from '@/theme/tokens';
@@ -17,17 +19,36 @@ import { greeting } from '@/utils/format';
 
 export default function HomeScreen() {
   const countryCode = useSettingsStore((s) => s.countryCode);
+  const language = useSettingsStore((s) => s.language);
   const t = useI18n();
   const [genre, setGenre] = useState<string | null>(null);
 
   const favorites = useFavoritesStore((s) => s.stations);
-  const topGenre = useStatsStore((s) => s.getTopGenre());
-  const recommended = useStations({
+  const listeningGenres = useStatsStore((s) => s.genres);
+  const savedSongs = useSavedSongsStore((s) => s.songs);
+
+  const favoriteUuids = useMemo(() => new Set(favorites.map((f) => f.stationuuid)), [favorites]);
+
+  const recommendationCandidates = useStations({
     countrycode: countryCode,
-    tag: topGenre ?? undefined,
     order: 'votes',
-    limit: 10,
+    limit: 30,
   });
+
+  const rankedRecommendations = useMemo(() => {
+    if (!recommendationCandidates.data) return [];
+    return rankRecommendedStations(
+      recommendationCandidates.data,
+      {
+        listeningGenres,
+        savedSongs,
+        favoriteStationUuids: favoriteUuids,
+        language,
+      },
+      10
+    );
+  }, [recommendationCandidates.data, listeningGenres, savedSongs, favoriteUuids, language]);
+
   const featured = useStations({ order: 'votes', limit: 10 });
   const popular = useStations({ countrycode: countryCode, tag: genre ?? undefined, limit: 25 });
 
@@ -52,16 +73,22 @@ export default function HomeScreen() {
         </>
       )}
 
-      {/* Recommended For You (AI & Listening Persona Based) */}
+      {/* Recommended For You (AI Multi-Vector Recommendation Engine) */}
       <SectionTitle>{t.recommendedForYou}</SectionTitle>
-      {recommended.isLoading ? (
+      {recommendationCandidates.isLoading ? (
         <StateView loading />
       ) : (
         <FlatList
           horizontal
-          data={recommended.data}
-          keyExtractor={(s) => `rec-${s.stationuuid}`}
-          renderItem={({ item }) => <FeaturedCard station={item} queue={recommended.data} />}
+          data={rankedRecommendations}
+          keyExtractor={(item) => `rec-${item.station.stationuuid}`}
+          renderItem={({ item }) => (
+            <FeaturedCard
+              station={item.station}
+              queue={rankedRecommendations.map((r) => r.station)}
+              badgeText={item.reasonBadge}
+            />
+          )}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.carousel}
           style={styles.bleed}
